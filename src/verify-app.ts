@@ -14,7 +14,10 @@ interface CommandOutcome {
 
 interface VitestReport {
   numTotalTests?: unknown;
+  numPassedTests?: unknown;
   numFailedTests?: unknown;
+  numPendingTests?: unknown;
+  numTodoTests?: unknown;
   success?: unknown;
 }
 
@@ -323,7 +326,10 @@ async function hasPassingVitestReport(reportPath: string): Promise<boolean> {
       report.success === true &&
       typeof report.numTotalTests === "number" &&
       report.numTotalTests > 0 &&
-      report.numFailedTests === 0
+      report.numPassedTests === report.numTotalTests &&
+      report.numFailedTests === 0 &&
+      report.numPendingTests === 0 &&
+      report.numTodoTests === 0
     );
   } catch {
     return false;
@@ -333,7 +339,7 @@ async function hasPassingVitestReport(reportPath: string): Promise<boolean> {
 export function unavailableAppVerification(reason: string): AppVerification {
   return {
     passed: false,
-    testsRun: [
+    checks: [
       testRun("vitest run", `App tests were not run: ${reason}`, "failed"),
       testRun("npm run build", `Production build was not run: ${reason}`, "failed"),
       testRun("npm run dev", `HTTP startup probe was not run: ${reason}`, "failed"),
@@ -381,10 +387,10 @@ export async function verifyGeneratedApp(
       port,
     );
 
-    const testsRun = [
+    const checks = [
       testRun(
         commands.test.display,
-        "The generated app's Vitest report contained at least one test and no failures",
+        "The generated app's Vitest report contained at least one completed test and no failed, skipped, or todo tests",
         testsPassed ? "passed" : "failed",
       ),
       testRun(
@@ -399,12 +405,12 @@ export async function verifyGeneratedApp(
       ),
     ];
 
-    return { passed: testsRun.every((entry) => entry.result === "passed"), testsRun };
+    return { passed: checks.every((entry) => entry.result === "passed"), checks };
   } catch (error) {
     await safeWriteLog(path.join(artifactDirectory, "app-verification-error.log"), `${String(error)}\n`);
     return {
       passed: false,
-      testsRun: [
+      checks: [
         testRun(commands.test.display, "App verification encountered an internal error", "failed"),
         testRun(commands.build, "Production build could not be verified", "failed"),
         testRun(commands.dev, "HTTP startup could not be verified", "failed"),

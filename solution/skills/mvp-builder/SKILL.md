@@ -7,11 +7,12 @@ description: Turn a non-technical product idea into a small, tested browser appl
 
 1. Extract the entity, its attributes, every journey detailed or implied by the idea, and any ambiguity.
 2. Use the public journey guidance as a coverage check. Implement every applicable pattern, but omit patterns the idea does not imply instead of inventing substitute features; record the rationale in `assumptions`.
-3. Prefer browser-local persistence unless the idea genuinely requires a backend.
-4. Implement accessible controls, validation, empty states, errors, and responsive layout.
-5. Test every applicable observable user behavior with the included Vitest, jsdom, and Testing Library setup. Startup and assumptions reporting are runner obligations, not UI test journeys.
-6. Run the tests and production build before reporting success.
-7. Write `report.partial.json` with this exact shape:
+3. Prefer browser-local persistence unless the idea genuinely requires a backend. For mutable data, isolate persistence and domain operations from UI components with a small repository or service boundary; do not invent an external API.
+4. Implement accessible controls, validation, empty states, errors, and responsive layout. Handle duplicate or repeated actions, boundary values, malformed stored data, and recoverable storage or runtime failures where relevant.
+5. Keep components focused, separate concerns, and avoid duplication so another developer or agent can extend the app without a rewrite.
+6. Test every applicable observable user behavior with the included Vitest, jsdom, and Testing Library setup. Startup and assumptions reporting are runner obligations, not UI test journeys. Every committed test must run and pass; do not leave skipped or todo tests.
+7. Run the tests and production build before reporting success.
+8. Write `report.partial.json` with this exact shape:
 
 ```json
 {

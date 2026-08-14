@@ -56,7 +56,7 @@ export interface PartialRunResult {
 
 export interface AppVerification {
   passed: boolean;
-  testsRun: TestRun[];
+  checks: TestRun[];
 }
 
 export interface PortReclamationAudit {
@@ -69,7 +69,7 @@ export interface PortReclamationAudit {
 }
 
 export interface RunResult extends PartialRunResult, UsageSummary {
-  reported_tests: TestRun[];
+  harness_checks: TestRun[];
   pi_exit_code: number;
   telemetry_source: "pi-json-event-stream";
   port_reclamation: PortReclamationAudit;

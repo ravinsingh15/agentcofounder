@@ -27,7 +27,7 @@ async function getFreePort(): Promise<number> {
   return address.port;
 }
 
-async function createPassingApp(): Promise<{ appDirectory: string; artifactDirectory: string }> {
+async function createTestApp(testSource?: string): Promise<{ appDirectory: string; artifactDirectory: string }> {
   const root = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-passing-app-"));
   temporaryDirectories.push(root);
   const appDirectory = path.join(root, "app");
@@ -39,7 +39,7 @@ async function createPassingApp(): Promise<{ appDirectory: string; artifactDirec
   await symlink(path.join(seedDirectory, "node_modules"), path.join(appDirectory, "node_modules"), "dir");
   await writeFile(
     path.join(appDirectory, "src", "generated.test.tsx"),
-    [
+    testSource ?? [
       'import { useState } from "react";',
       'import { render, screen } from "@testing-library/react";',
       'import userEvent from "@testing-library/user-event";',
@@ -104,8 +104,8 @@ describe("app verification", () => {
     });
 
     expect(result.passed).toBe(false);
-    expect(result.testsRun).toHaveLength(3);
-    expect(result.testsRun.every((entry) => entry.result !== "passed")).toBe(true);
+    expect(result.checks).toHaveLength(3);
+    expect(result.checks.every((entry) => entry.result !== "passed")).toBe(true);
   });
 
   it("rejects the untouched zero-test seed while confirming that it builds and serves", async () => {
@@ -119,7 +119,7 @@ describe("app verification", () => {
     });
 
     expect(result.passed).toBe(false);
-    expect(result.testsRun.map((entry) => entry.result)).toEqual(["failed", "passed", "passed"]);
+    expect(result.checks.map((entry) => entry.result)).toEqual(["failed", "passed", "passed"]);
   }, 45_000);
 
   it("never accepts HTTP from a server that already owned the configured port", async () => {
@@ -144,7 +144,7 @@ describe("app verification", () => {
         port: address.port,
       });
 
-      expect(result.testsRun[2]?.result).toBe("failed");
+      expect(result.checks[2]?.result).toBe("failed");
       expect(requests).toBe(0);
     } finally {
       await new Promise<void>((resolve, reject) => {
@@ -154,7 +154,7 @@ describe("app verification", () => {
   }, 45_000);
 
   it("passes a generated app with participant-authored tests, a build, and its own server", async () => {
-    const { appDirectory, artifactDirectory } = await createPassingApp();
+    const { appDirectory, artifactDirectory } = await createTestApp();
     const port = await getFreePort();
 
     const result = await verifyGeneratedApp(appDirectory, artifactDirectory, {
@@ -165,26 +165,41 @@ describe("app verification", () => {
     });
 
     expect(result.passed).toBe(true);
-    expect(result.testsRun.map((entry) => entry.result)).toEqual(["passed", "passed", "passed"]);
-    expect(result.testsRun[0]?.command).toContain("--outputFile=");
-    expect(result.testsRun[0]?.command).toContain(path.join("app", "node_modules", ".bin", "vitest"));
-    const displayedReportPath = result.testsRun[0]?.command.split("--outputFile=")[1]?.split(" ")[0];
+    expect(result.checks.map((entry) => entry.result)).toEqual(["passed", "passed", "passed"]);
+    expect(result.checks[0]?.command).toContain("--outputFile=");
+    expect(result.checks[0]?.command).toContain(path.join("app", "node_modules", ".bin", "vitest"));
+    const displayedReportPath = result.checks[0]?.command.split("--outputFile=")[1]?.split(" ")[0];
     expect(displayedReportPath).toBe(path.join("artifacts", "app-test-results.json"));
   }, 45_000);
 
+  it("rejects a Vitest report containing only todo tests", async () => {
+    const { appDirectory, artifactDirectory } = await createTestApp(
+      ['import { it } from "vitest";', '', 'it.todo("implements a user journey");', ''].join("\n"),
+    );
+
+    const result = await verifyGeneratedApp(appDirectory, artifactDirectory, {
+      commandTimeoutMs: 30_000,
+      serverTimeoutMs: 10_000,
+      port: await getFreePort(),
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.checks.map((entry) => entry.result)).toEqual(["failed", "passed", "passed"]);
+  }, 45_000);
+
   defaultPortTest("exercises the bare production dev command on port 3000", async () => {
-    const { appDirectory, artifactDirectory } = await createPassingApp();
+    const { appDirectory, artifactDirectory } = await createTestApp();
     const result = await verifyGeneratedApp(appDirectory, artifactDirectory, {
       commandTimeoutMs: 30_000,
       serverTimeoutMs: 10_000,
     });
 
     expect(result.passed).toBe(true);
-    expect(result.testsRun[2]).toMatchObject({ command: "npm run dev", result: "passed" });
+    expect(result.checks[2]).toMatchObject({ command: "npm run dev", result: "passed" });
   }, 45_000);
 
   it("keeps verification verdicts independent from audit-log writes", async () => {
-    const { appDirectory, artifactDirectory } = await createPassingApp();
+    const { appDirectory, artifactDirectory } = await createTestApp();
     await Promise.all([
       writeFile(path.join(artifactDirectory, "app-test.log"), "existing\n", "utf8"),
       writeFile(path.join(artifactDirectory, "app-build.log"), "existing\n", "utf8"),
@@ -199,8 +214,8 @@ describe("app verification", () => {
       });
 
       expect(result.passed).toBe(true);
-      expect(result.testsRun.map((entry) => entry.result)).toEqual(["passed", "passed", "passed"]);
-      expect(result.testsRun[0]?.command).toContain("--outputFile=app-test-results.json");
+      expect(result.checks.map((entry) => entry.result)).toEqual(["passed", "passed", "passed"]);
+      expect(result.checks[0]?.command).toContain("--outputFile=app-test-results.json");
       expect(warning).toHaveBeenCalledTimes(3);
     } finally {
       warning.mockRestore();

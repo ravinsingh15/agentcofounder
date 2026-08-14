@@ -19,6 +19,13 @@ const FALLBACK_PARTIAL: PartialRunResult = {
   tests_run: [],
 };
 
+const APP_DIRECTORY_START_COMMAND = "npm run dev";
+
+export function rootStartCommand(repositoryRoot: string, appDirectory: string): string {
+  const relativeAppDirectory = path.relative(repositoryRoot, appDirectory).split(path.sep).join("/");
+  return `npm --prefix ${JSON.stringify(relativeAppDirectory)} run dev`;
+}
+
 function filteredStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
@@ -75,6 +82,7 @@ export function composeResult(
   piExitCode: number,
   verification: AppVerification,
   portReclamation: PortReclamationAudit,
+  startCommand: string,
 ): RunResult {
   const runFailed = piExitCode !== 0 || usage.model_calls === 0 || partial.status === "failed";
   const status = runFailed ? "failed" : verification.passed ? partial.status : "partial";
@@ -82,9 +90,9 @@ export function composeResult(
     ...partial,
     status,
     app_url: "http://localhost:3000",
-    start_command: "npm run dev",
-    reported_tests: partial.tests_run,
-    tests_run: verification.testsRun,
+    start_command: startCommand,
+    tests_run: partial.tests_run,
+    harness_checks: verification.checks,
     ...usage,
     pi_exit_code: piExitCode,
     telemetry_source: "pi-json-event-stream",
@@ -98,14 +106,17 @@ export async function writeResult(
   mirrorPaths: string[] = [],
 ): Promise<string[]> {
   const resultPath = path.join(appDirectory, "result.json");
-  const content = `${JSON.stringify(result, null, 2)}\n`;
   const writtenPaths: string[] = [];
-  for (const destination of [resultPath, ...mirrorPaths]) {
+  const destinations = [
+    { path: resultPath, value: { ...result, start_command: APP_DIRECTORY_START_COMMAND } },
+    ...mirrorPaths.map((destination) => ({ path: destination, value: result })),
+  ];
+  for (const destination of destinations) {
     try {
-      await writeFile(destination, content, "utf8");
-      writtenPaths.push(destination);
+      await writeFile(destination.path, `${JSON.stringify(destination.value, null, 2)}\n`, "utf8");
+      writtenPaths.push(destination.path);
     } catch (error) {
-      console.warn(`Unable to write result destination ${destination}: ${String(error)}`);
+      console.warn(`Unable to write result destination ${destination.path}: ${String(error)}`);
     }
   }
   if (writtenPaths.length === 0) throw new Error("Unable to write result.json to any configured destination");

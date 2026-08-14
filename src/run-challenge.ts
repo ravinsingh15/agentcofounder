@@ -6,7 +6,13 @@ import { fileURLToPath } from "node:url";
 import { prepareOutput } from "./prepare-output.js";
 import { auditAppPortAfterPi } from "./port-owner.js";
 import { signalProcessTree, terminateProcessTree, usesDetachedProcessGroup } from "./process-tree.js";
-import { composeResult, missingRequiredResultPaths, readPartialResult, writeResult } from "./result.js";
+import {
+  composeResult,
+  missingRequiredResultPaths,
+  readPartialResult,
+  rootStartCommand,
+  writeResult,
+} from "./result.js";
 import { collectUsageFromJsonLines } from "./usage.js";
 import type { RunResult } from "./types.js";
 import { validateResultObject } from "./validate-result.js";
@@ -275,10 +281,11 @@ async function main(): Promise<void> {
   const usage = collectUsageFromJsonLines(await readFile(eventFile, "utf8"));
   const partial = await readPartialResult(outputDirectory);
   const canVerifyApp = pi.exitCode === 0 && usage.model_calls > 0;
+  const startCommand = rootStartCommand(REPOSITORY_ROOT, outputDirectory);
   let verification = unavailableAppVerification(
     canVerifyApp ? "app verification had not completed" : "Pi did not complete with audited model usage",
   );
-  let result = composeResult(partial, usage, pi.exitCode, verification, portReclamation);
+  let result = composeResult(partial, usage, pi.exitCode, verification, portReclamation, startCommand);
   const appResultPath = path.join(outputDirectory, "result.json");
   const rootResultPath = path.join(REPOSITORY_ROOT, "result.json");
   const requiredResultPaths = [appResultPath, rootResultPath];
@@ -289,7 +296,7 @@ async function main(): Promise<void> {
   );
   if (canVerifyApp) {
     verification = await verifyGeneratedApp(outputDirectory, artifactDirectory, { displayRoot: REPOSITORY_ROOT });
-    result = composeResult(partial, usage, pi.exitCode, verification, portReclamation);
+    result = composeResult(partial, usage, pi.exitCode, verification, portReclamation, startCommand);
     resultPaths = await writeResult(outputDirectory, result, [rootResultPath]);
   }
   const missingResultPaths = missingRequiredResultPaths(resultPaths, requiredResultPaths);

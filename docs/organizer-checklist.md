@@ -20,7 +20,7 @@
 5. Run one credentialed submission against the finalized public prompt committed at `contract-public/development-idea.txt` through the complete success path.
    - Confirm `pi_exit_code` is `0`, `status` is `success`, and `model_calls` is greater than zero.
    - Inspect `port_reclamation` and investigate any run where cleanup was attempted or a listener predated Pi.
-   - Validate both `output/app/result.json` and the repository-root `result.json`, and confirm their contents match.
+   - Validate both `output/app/result.json` and the repository-root `result.json`; confirm only their location-aware `start_command` values differ, and execute each command from its result directory.
    - Recompute every headline token and cost total from `call_log` and confirm it reconciles.
    - Confirm a non-empty Pi session JSONL and raw event stream land under the run artifact directory.
 6. Run the unchanged commit against the hidden prompt in a new isolated environment.
