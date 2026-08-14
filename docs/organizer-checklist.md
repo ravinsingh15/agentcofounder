@@ -15,8 +15,9 @@
 1. Record the participant commit SHA at the deadline.
 2. Build it in the organizer-controlled runtime using `npm ci --ignore-scripts`.
 3. Verify the installed Pi package reports `0.84.1`.
-4. Run the submission once against the public prompt as a preflight.
-5. Run the unchanged commit against the hidden prompt in a new isolated environment.
+4. Confirm the pinned organizer provider/model appears in Pi's offline model catalogue before the timed run.
+5. Run one credentialed submission against the public prompt and confirm that a non-empty Pi session JSONL lands under the configured session directory.
+6. Run the unchanged commit against the hidden prompt in a new isolated environment.
 
 ## Judge boundary
 
@@ -24,7 +25,7 @@
 - Provide a short-lived model credential scoped to the designated gateway and model.
 - Block instance metadata, internal networks, and unrelated outbound network access.
 - Enforce wall-clock and process-tree termination outside the participant process.
-- Mount the harness, public contract, validator, and result schema read-only; give the agent write access only to its generated app and artifact directories.
+- Mount the harness, public contract, validator, and result schema read-only. Give the process write access only to the generated app, artifact directory, and an optional dedicated repository-root `result.json` target.
 - Run hidden browser tests from a separate process or container.
 - Recompute telemetry from the captured Pi session and gateway records.
 - Treat disagreement between participant telemetry, Pi session telemetry, and gateway telemetry as a failed audit.

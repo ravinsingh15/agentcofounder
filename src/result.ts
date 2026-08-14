@@ -72,10 +72,14 @@ export function composeResult(
   piExitCode: number,
   verification: AppVerification,
 ): RunResult {
-  const trustworthyRun = piExitCode === 0 && usage.model_calls > 0 && verification.passed;
+  const runFailed = piExitCode !== 0 || usage.model_calls === 0 || partial.status === "failed";
+  const status = runFailed ? "failed" : verification.passed ? partial.status : "partial";
   return {
     ...partial,
-    status: trustworthyRun ? partial.status : "failed",
+    status,
+    app_url: "http://localhost:3000",
+    start_command: "npm run dev",
+    reported_tests: partial.tests_run,
     tests_run: verification.testsRun,
     ...usage,
     pi_exit_code: piExitCode,
@@ -86,11 +90,19 @@ export function composeResult(
 export async function writeResult(
   appDirectory: string,
   result: RunResult,
-  mirrorPath?: string,
+  mirrorPaths: string[] = [],
 ): Promise<string[]> {
   const resultPath = path.join(appDirectory, "result.json");
   const content = `${JSON.stringify(result, null, 2)}\n`;
-  await writeFile(resultPath, content, "utf8");
-  if (mirrorPath) await writeFile(mirrorPath, content, "utf8");
-  return mirrorPath ? [resultPath, mirrorPath] : [resultPath];
+  const writtenPaths: string[] = [];
+  for (const destination of [resultPath, ...mirrorPaths]) {
+    try {
+      await writeFile(destination, content, "utf8");
+      writtenPaths.push(destination);
+    } catch {
+      // Preserve every result destination that remains writable.
+    }
+  }
+  if (writtenPaths.length === 0) throw new Error("Unable to write result.json to any configured destination");
+  return writtenPaths;
 }

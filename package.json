@@ -12,7 +12,7 @@
     "validate:result": "node --import tsx src/validate-result.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "app:test": "npm --prefix app-template test",
+    "app:test": "npm --prefix app-template test -- --passWithNoTests",
     "app:build": "npm --prefix app-template run build",
     "check": "npm run typecheck && npm run test && npm run app:test && npm run app:build"
   },

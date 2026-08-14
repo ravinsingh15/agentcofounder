@@ -60,6 +60,7 @@ export interface AppVerification {
 }
 
 export interface RunResult extends PartialRunResult, UsageSummary {
+  reported_tests: TestRun[];
   pi_exit_code: number;
   telemetry_source: "pi-json-event-stream";
 }

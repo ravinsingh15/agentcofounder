@@ -8,7 +8,7 @@ import { signalProcessTree, usesDetachedProcessGroup } from "./process-tree.js";
 import { composeResult, readPartialResult, writeResult } from "./result.js";
 import { collectUsageFromJsonLines } from "./usage.js";
 import { validateResultObject } from "./validate-result.js";
-import { verifyGeneratedApp } from "./verify-app.js";
+import { skippedAppVerification, verifyGeneratedApp } from "./verify-app.js";
 
 interface Arguments {
   ideaFile: string;
@@ -181,8 +181,6 @@ export function buildPiArguments(
   const args = [
     "--mode",
     "json",
-    "--print",
-    "--approve",
     "--offline",
     "--no-extensions",
     "--no-skills",
@@ -250,13 +248,19 @@ async function main(): Promise<void> {
 
   const usage = collectUsageFromJsonLines(await readFile(eventFile, "utf8"));
   const partial = await readPartialResult(outputDirectory);
-  const verification = await verifyGeneratedApp(outputDirectory, artifactDirectory);
-  const result = composeResult(partial, usage, pi.exitCode, verification);
-  const resultPaths = await writeResult(
+  let verification = skippedAppVerification("Pi did not complete with audited model usage");
+  let result = composeResult(partial, usage, pi.exitCode, verification);
+  const rootResultPath = path.join(REPOSITORY_ROOT, "result.json");
+  let resultPaths = await writeResult(
     outputDirectory,
     result,
-    path.join(REPOSITORY_ROOT, "output", "result.json"),
+    [rootResultPath],
   );
+  if (pi.exitCode === 0 && usage.model_calls > 0) {
+    verification = await verifyGeneratedApp(outputDirectory, artifactDirectory);
+    result = composeResult(partial, usage, pi.exitCode, verification);
+    resultPaths = await writeResult(outputDirectory, result, [rootResultPath]);
+  }
   const validationErrors = await validateResultObject(result);
   if (validationErrors.length > 0) {
     for (const error of validationErrors) console.error(`- ${error}`);

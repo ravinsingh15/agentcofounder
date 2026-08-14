@@ -4,6 +4,7 @@ node_modules/
 .env.*
 !.env.example
 *.log
+/result.json
 
 artifacts/*
 !artifacts/.gitkeep

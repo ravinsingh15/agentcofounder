@@ -16,9 +16,10 @@ describe("Pi launch", () => {
     delete process.env.CHALLENGE_THINKING;
     try {
       const args = buildPiArguments("Build a tool", "Stable system prompt", "Stable app contract", "/tmp/run");
-      expect(args).toContain("--print");
       expect(args).toContain("--offline");
       expect(args).toContain("--no-context-files");
+      expect(args).not.toContain("--print");
+      expect(args).not.toContain("--approve");
       expect(args[args.indexOf("--thinking") + 1]).toBe("off");
       expect(args[args.indexOf("--system-prompt") + 1]).toContain("Stable app contract");
       expect(args.at(-1)).toContain("Build a tool");
@@ -39,7 +40,6 @@ describe("Pi launch", () => {
       [
         "--mode",
         "json",
-        "--print",
         "--offline",
         "--no-extensions",
         "--no-skills",

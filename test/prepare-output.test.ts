@@ -24,6 +24,7 @@ describe("prepareOutput", () => {
     const output = await prepareOutput(root, "output/app");
     await writeFile(path.join(output, "generated.txt"), "temporary\n", "utf8");
     await writeFile(path.join(root, "output", "result.json"), "stale\n", "utf8");
+    await writeFile(path.join(root, "result.json"), "stale\n", "utf8");
     await prepareOutput(root, "output/app");
 
     expect(await readFile(path.join(output, "seed.txt"), "utf8")).toBe("seed\n");
@@ -31,6 +32,7 @@ describe("prepareOutput", () => {
     await expect(readFile(path.join(root, "output", "result.json"), "utf8")).rejects.toMatchObject({
       code: "ENOENT",
     });
+    await expect(readFile(path.join(root, "result.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("refuses to reset an unmarked directory", async () => {

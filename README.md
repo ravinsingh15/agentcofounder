@@ -72,7 +72,9 @@ npm run validate:result -- output/app/result.json
 
 The model writes `report.partial.json`, containing the product summary, assumptions, features, and tests. The runner writes `result.json` after parsing Pi's completed `message_end` events. This prevents the model from inventing headline token totals.
 
-The runner independently executes `npm test`, `npm run build`, starts the application, probes port 3000, and terminates the full process group. Its verified checks replace the model-reported `tests_run`. A non-failed result must contain at least one audited model call. Identical `result.json` files are emitted at `output/app/result.json` and `output/result.json`.
+The runner independently executes the pinned Vitest binary, requires at least one real test, runs `npm run build`, starts the application, probes port 3000 only while the spawned server is alive, and terminates the full process group. Its checks populate `tests_run`; the model's product-journey claims remain available as `reported_tests`. The runner also owns `app_url` and `start_command`, so harmless formatting differences in the partial report cannot invalidate a run.
+
+A provisional result is written before app verification starts. Verification failures degrade a completed model run to `partial`; Pi startup or telemetry failures remain `failed`. Identical final results are emitted at the generated app root (`output/app/result.json`) and repository root (`result.json`). Port 3000 must be free before verification begins.
 
 The raw event stream and Pi session files are retained for audit. Official judging must independently recompute usage and compare it with `result.json`; the participant-controlled report is never the final scoring authority.
 

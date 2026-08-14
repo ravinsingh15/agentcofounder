@@ -11,6 +11,7 @@
     "implemented_features",
     "assumptions",
     "tests_run",
+    "reported_tests",
     "model_calls",
     "input_tokens",
     "output_tokens",
@@ -37,6 +38,19 @@
       "items": { "type": "string", "minLength": 1 }
     },
     "tests_run": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "journey", "result"],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "journey": { "type": "string", "minLength": 1 },
+          "result": { "enum": ["passed", "failed", "skipped"] }
+        }
+      }
+    },
+    "reported_tests": {
       "type": "array",
       "items": {
         "type": "object",

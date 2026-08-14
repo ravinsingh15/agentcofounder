@@ -15,4 +15,4 @@ Required outcome:
 - Write `report.partial.json` at the application root using the shape described in `AGENTS.md`.
 - Do not write `result.json`; the challenge runner owns its audited telemetry fields.
 
-You may replace any starter source code when that produces a better result.
+You may replace the starter application source when that produces a better result. Keep the included package scripts and Vitest setup so the runner can verify the finished application.

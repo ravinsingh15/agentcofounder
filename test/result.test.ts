@@ -1,5 +1,8 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { composeResult, normalizePartialResult } from "../src/result.js";
+import { composeResult, normalizePartialResult, writeResult } from "../src/result.js";
 import type { AppVerification, PartialRunResult, UsageSummary } from "../src/types.js";
 import { validateResultObject } from "../src/validate-result.js";
 
@@ -73,23 +76,42 @@ describe("result contract", () => {
     );
   });
 
-  it("overrides success when an independent app check fails", () => {
-    expect(composeResult(partial, usage, 0, { ...verification, passed: false }).status).toBe("failed");
+  it("degrades a completed run to partial when an independent app check fails", () => {
+    expect(composeResult(partial, usage, 0, { ...verification, passed: false }).status).toBe("partial");
   });
 
-  it("uses runner-verified tests and strips unknown report fields", () => {
+  it("uses runner-owned launch fields and preserves normalized reported product journeys", () => {
     const normalized = normalizePartialResult({
       ...partial,
+      app_url: "http://127.0.0.1:3000/",
+      start_command: "npm start",
       ignored: "extra",
       tests_run: [{ ...partial.tests_run[0], notes: "chatty model output" }],
     });
     expect(normalized?.tests_run).toEqual(partial.tests_run);
-    expect(composeResult(partial, usage, 0, verification).tests_run).toEqual(verification.testsRun);
+    const result = composeResult(normalized ?? partial, usage, 0, verification);
+    expect(result).toMatchObject({
+      app_url: "http://localhost:3000",
+      start_command: "npm run dev",
+      tests_run: verification.testsRun,
+      reported_tests: partial.tests_run,
+    });
   });
 
   it("rejects telemetry totals that do not reconcile", async () => {
     const result = composeResult(partial, usage, 0, verification);
     result.input_tokens += 1;
     expect(await validateResultObject(result)).toContain("input_tokens does not reconcile with call_log");
+  });
+
+  it("keeps the app-root result when an optional mirror cannot be written", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-result-"));
+    try {
+      const result = composeResult(partial, usage, 0, verification);
+      const paths = await writeResult(directory, result, [path.join(directory, "missing", "result.json")]);
+      expect(paths).toEqual([path.join(directory, "result.json")]);
+    } finally {
+      await rm(directory, { recursive: true });
+    }
   });
 });

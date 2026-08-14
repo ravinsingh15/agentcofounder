@@ -18,10 +18,15 @@ export async function prepareOutput(
     throw new Error(`Output directory must be a child of ${outputRoot}`);
   }
 
-  try {
-    await unlink(path.join(outputRoot, "result.json"));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  for (const staleResult of [
+    path.join(repositoryRoot, "result.json"),
+    path.join(outputRoot, "result.json"),
+  ]) {
+    try {
+      await unlink(staleResult);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
   }
 
   let outputExists = false;
