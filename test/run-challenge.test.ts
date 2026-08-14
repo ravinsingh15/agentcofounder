@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { stripPiDocumentationBlock } from "../solution/extensions/protected-paths.js";
 import { buildPiArguments, parseArguments, runPi, runRequiresFailureExit } from "../src/run-challenge.js";
 
 const temporaryDirectories: string[] = [];
@@ -78,6 +79,36 @@ describe("Pi launch", () => {
     expect(suppliedSystemPrompt).toContain("Never omit an implied journey merely to simplify");
     expect(suppliedSystemPrompt.match(/^# Generated application contract$/gmu)).toHaveLength(1);
     expect(suppliedSystemPrompt).not.toMatch(/^## Generated application contract$/mu);
+  });
+
+  it("removes only Pi's documentation block from the composed system prompt", () => {
+    const composed = [
+      "Available tools:",
+      "- read: Read files",
+      "",
+      "Guidelines:",
+      "- Use bash for file operations",
+      "",
+      "Pi documentation (read only when the user asks about pi itself):",
+      "- Main documentation: /challenge/node_modules/pi/README.md",
+      "- Additional docs: /challenge/node_modules/pi/docs",
+      "- Always read pi .md files completely",
+      "",
+      "Build the smallest maintainable application.",
+      "",
+      "<available_skills>mvp-builder</available_skills>",
+      "Current working directory: /challenge/output/app",
+    ].join("\n");
+
+    const stripped = stripPiDocumentationBlock(composed);
+    expect(stripped).toContain("Available tools:");
+    expect(stripped).toContain("Guidelines:");
+    expect(stripped).toContain("Build the smallest maintainable application.");
+    expect(stripped).toContain("<available_skills>mvp-builder</available_skills>");
+    expect(stripped).toContain("Current working directory: /challenge/output/app");
+    expect(stripped).not.toContain("Pi documentation");
+    expect(stripped).not.toContain("node_modules/pi/docs");
+    expect(stripPiDocumentationBlock("No Pi documentation block")).toBe("No Pi documentation block");
   });
 
   it("reaches Pi provider validation without waiting for stdin EOF", async () => {

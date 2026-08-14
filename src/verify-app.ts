@@ -145,9 +145,9 @@ async function runLoggedCommand(
   return outcome;
 }
 
-export async function portHasListener(port: number, timeoutMs = 500): Promise<boolean> {
+async function hostHasListener(host: string, port: number, timeoutMs: number): Promise<boolean> {
   return await new Promise<boolean>((resolve) => {
-    const socket = net.createConnection({ host: "127.0.0.1", port });
+    const socket = net.createConnection({ host, port });
     let settled = false;
     const finish = (listening: boolean): void => {
       if (settled) return;
@@ -159,6 +159,14 @@ export async function portHasListener(port: number, timeoutMs = 500): Promise<bo
     socket.once("error", () => finish(false));
     socket.setTimeout(timeoutMs, () => finish(false));
   });
+}
+
+export async function portHasListener(port: number, timeoutMs = 500): Promise<boolean> {
+  const listeners = await Promise.all([
+    hostHasListener("127.0.0.1", port, timeoutMs),
+    hostHasListener("::1", port, timeoutMs),
+  ]);
+  return listeners.some(Boolean);
 }
 
 async function waitForHttp(

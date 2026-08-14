@@ -13,6 +13,27 @@ if (defaultPortOccupied) {
 }
 const defaultPortTest = defaultPortOccupied ? it.skip : it;
 
+async function hasIpv6Loopback(): Promise<boolean> {
+  const server = net.createServer();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen({ host: "::1", port: 0, ipv6Only: true }, resolve);
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (server.listening) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }
+}
+
+const ipv6LoopbackAvailable = await hasIpv6Loopback();
+if (!ipv6LoopbackAvailable) console.warn("Skipping IPv6-only port ownership test: ::1 is unavailable.");
+const ipv6Test = ipv6LoopbackAvailable ? it : it.skip;
+
 async function getFreePort(): Promise<number> {
   const server = net.createServer();
   await new Promise<void>((resolve, reject) => {
@@ -138,6 +159,38 @@ describe("app verification", () => {
     const artifactDirectory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-port-check-"));
     temporaryDirectories.push(artifactDirectory);
     try {
+      const result = await verifyGeneratedApp(path.resolve("app-template"), artifactDirectory, {
+        commandTimeoutMs: 30_000,
+        serverTimeoutMs: 2_000,
+        port: address.port,
+      });
+
+      expect(result.checks[2]?.result).toBe("failed");
+      expect(requests).toBe(0);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        squatter.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  }, 45_000);
+
+  ipv6Test("never accepts HTTP from an IPv6-only server that already owned the configured port", async () => {
+    let requests = 0;
+    const squatter = http.createServer((_request, response) => {
+      requests += 1;
+      response.end("not the generated app");
+    });
+    await new Promise<void>((resolve, reject) => {
+      squatter.once("error", reject);
+      squatter.listen({ host: "::1", port: 0, ipv6Only: true }, resolve);
+    });
+    const address = squatter.address();
+    if (address === null || typeof address === "string") throw new Error("Expected a TCP address");
+
+    const artifactDirectory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-ipv6-port-check-"));
+    temporaryDirectories.push(artifactDirectory);
+    try {
+      expect(await portHasListener(address.port)).toBe(true);
       const result = await verifyGeneratedApp(path.resolve("app-template"), artifactDirectory, {
         commandTimeoutMs: 30_000,
         serverTimeoutMs: 2_000,

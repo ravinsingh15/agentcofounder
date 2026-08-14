@@ -1,8 +1,34 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import path from "node:path";
 
+const PI_DOCUMENTATION_HEADING = "\n\nPi documentation (read only when ";
+
+export function stripPiDocumentationBlock(systemPrompt: string): string {
+  const blockStart = systemPrompt.indexOf(PI_DOCUMENTATION_HEADING);
+  if (blockStart < 0) return systemPrompt;
+
+  const headingEnd = systemPrompt.indexOf("\n", blockStart + PI_DOCUMENTATION_HEADING.length);
+  if (headingEnd < 0) return systemPrompt;
+
+  let lineStart = headingEnd + 1;
+  let bulletCount = 0;
+  while (systemPrompt.startsWith("- ", lineStart)) {
+    bulletCount += 1;
+    const lineEnd = systemPrompt.indexOf("\n", lineStart);
+    if (lineEnd < 0) return systemPrompt.slice(0, blockStart);
+    lineStart = lineEnd + 1;
+  }
+  if (bulletCount === 0) return systemPrompt;
+
+  return systemPrompt.slice(0, blockStart) + systemPrompt.slice(Math.max(blockStart, lineStart - 1));
+}
+
 export default function protectedPaths(pi: ExtensionAPI) {
   const appRoot = process.cwd();
+
+  pi.on("before_agent_start", async (event) => ({
+    systemPrompt: stripPiDocumentationBlock(event.systemPrompt),
+  }));
 
   pi.on("tool_call", async (event, context) => {
     if (event.toolName !== "write" && event.toolName !== "edit") return undefined;
