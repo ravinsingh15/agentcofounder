@@ -5,11 +5,11 @@ description: Turn a non-technical product idea into a small, tested browser appl
 
 # MVP Builder
 
-1. Extract the entity, its attributes, every journey in the public journey contract, and any ambiguity.
-2. Treat journey coverage as fixed. Choose the smallest data model and interface only after mapping how every journey will work.
+1. Extract the entity, its attributes, every journey detailed or implied by the idea, and any ambiguity.
+2. Use the public journey guidance as a coverage check. Implement every applicable pattern, but omit patterns the idea does not imply instead of inventing substitute features; record the rationale in `assumptions`.
 3. Prefer browser-local persistence unless the idea genuinely requires a backend.
 4. Implement accessible controls, validation, empty states, errors, and responsive layout.
-5. Test observable user behaviour across the public journey contract with the included Vitest, jsdom, and Testing Library setup.
+5. Test every applicable observable user behavior with the included Vitest, jsdom, and Testing Library setup. Startup and assumptions reporting are runner obligations, not UI test journeys.
 6. Run the tests and production build before reporting success.
 7. Write `report.partial.json` with this exact shape:
 

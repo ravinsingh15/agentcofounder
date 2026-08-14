@@ -74,7 +74,7 @@ npm run validate:result -- output/app/result.json
 
 The model writes `report.partial.json`, containing the product summary, assumptions, features, and tests. The runner writes `result.json` after parsing Pi's completed `message_end` events. This prevents the model from inventing headline token totals.
 
-The runner appends the canonical domain-neutral journey contract from `contract-public/journeys.md` to Pi's system prompt. This makes feature coverage explicit while leaving the product domain and implementation strategy participant-controlled.
+The runner appends the canonical domain-neutral journey guidance from `contract-public/journeys.md` to Pi's system prompt. It prevents implied behaviors from being dropped for simplicity while explicitly rejecting unrelated substitute features; the input idea remains authoritative.
 
 The runner independently executes the pinned Vitest binary, requires at least one real test, runs `npm run build`, starts the application, probes port 3000 only while the spawned server is alive, and terminates the full process group. Its checks populate `tests_run`; the model's product-journey claims remain available as `reported_tests`. The runner also owns `app_url` and `start_command`, so harmless formatting differences in the partial report cannot invalidate a run.
 

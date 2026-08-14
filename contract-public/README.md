@@ -2,7 +2,7 @@
 
 The public development idea is intentionally the only product-specific fixture in this repository.
 
-The generated application must cover the domain-neutral [public journey contract](journeys.md). The runner appends that exact file to Pi's system prompt, keeping participant documentation and runtime guidance aligned.
+The domain-neutral [public journey guidance](journeys.md) helps identify common behaviors without making them mandatory for every idea. The input idea remains authoritative: implement every journey it details or implies, and omit unrelated features. The runner appends that exact guidance to Pi's system prompt, keeping participant documentation and runtime guidance aligned.
 
 `result.schema.json` validates the complete final result emitted by this starter harness, not only the minimum fields from the challenge specification. It deliberately requires the harness audit fields `reported_tests`, `reasoning_tokens`, `cost_total`, `pi_exit_code`, `telemetry_source`, and `port_reclamation`. A replacement runner may add fields but must preserve these fields and their semantics.
 

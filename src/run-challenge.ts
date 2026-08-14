@@ -204,7 +204,7 @@ export function buildPiArguments(
     "--no-themes",
     "--no-context-files",
     "--system-prompt",
-    `${systemPrompt.trim()}\n\n${publicJourneys.trim()}\n\n## Generated application contract\n\n${appContext.trim()}`,
+    `${systemPrompt.trim()}\n\n${publicJourneys.trim()}\n\n${appContext.trim()}`,
     "--session-dir",
     path.join(artifactDirectory, "sessions"),
     "--extension",

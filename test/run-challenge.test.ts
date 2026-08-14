@@ -41,7 +41,7 @@ describe("Pi launch", () => {
     }
   });
 
-  it("injects the canonical public journey contract into Pi's system prompt", async () => {
+  it("injects structurally consistent public journey guidance into Pi's system prompt", async () => {
     const [systemPrompt, publicJourneys, appContext] = await Promise.all([
       readFile(path.resolve("solution/system-prompt.md"), "utf8"),
       readFile(path.resolve("contract-public/journeys.md"), "utf8"),
@@ -49,19 +49,25 @@ describe("Pi launch", () => {
     ]);
     const args = buildPiArguments("Build a tool", systemPrompt, publicJourneys, appContext, "/tmp/run");
     const suppliedSystemPrompt = args[args.indexOf("--system-prompt") + 1] ?? "";
+    const behaviorSection = /## Behaviors to implement and test when implied\s+([\s\S]*?)\n## /u.exec(
+      publicJourneys,
+    )?.[1];
+    const requirementSection = /## Run and reporting requirements\s+([\s\S]*)$/u.exec(publicJourneys)?.[1];
+    const behaviorItems = [...(behaviorSection ?? "").matchAll(/^\d+\.\s+(.+)$/gmu)].map((match) => match[1]);
+    const requirementItems = [...(requirementSection ?? "").matchAll(/^-\s+(.+)$/gmu)].map(
+      (match) => match[1],
+    );
 
     expect(suppliedSystemPrompt).toContain(publicJourneys.trim());
-    for (const requiredJourney of [
-      "Add a complete record",
-      "Edit and delete an existing record",
-      "Narrow the list",
-      "Show the requested derived value",
-      "Preserve required data across a browser refresh",
-      "Record the decision made for the idea's ambiguity",
-    ]) {
-      expect(suppliedSystemPrompt).toContain(requiredJourney);
+    expect(behaviorItems.length).toBeGreaterThan(0);
+    expect(requirementItems.length).toBeGreaterThan(0);
+    for (const contractItem of [...behaviorItems, ...requirementItems]) {
+      expect(suppliedSystemPrompt).toContain(contractItem);
     }
-    expect(suppliedSystemPrompt).toContain("Minimize implementation complexity, not feature coverage");
+    expect(suppliedSystemPrompt).toContain("omit it instead of inventing an equivalent feature");
+    expect(suppliedSystemPrompt).toContain("Never omit an implied journey merely to simplify");
+    expect(suppliedSystemPrompt.match(/^# Generated application contract$/gmu)).toHaveLength(1);
+    expect(suppliedSystemPrompt).not.toMatch(/^## Generated application contract$/mu);
   });
 
   it("reaches Pi provider validation without waiting for stdin EOF", async () => {
