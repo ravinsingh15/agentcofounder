@@ -56,7 +56,9 @@ const verification: AppVerification = {
 
 describe("result contract", () => {
   it("accepts a reconciled result", async () => {
-    expect(await validateResultObject(composeResult(partial, usage, 0, verification))).toEqual([]);
+    const result = composeResult(partial, usage, 0, verification);
+    expect(await validateResultObject(result)).toEqual([]);
+    expect(result.port_reclamation).toMatchObject({ attempted: false, process_ids: [] });
   });
 
   it("overrides success when Pi exits unsuccessfully", () => {
@@ -164,12 +166,12 @@ describe("result contract", () => {
     }
   });
 
-  it("identifies a requested result destination that was not written", () => {
+  it("identifies either required result destination when it was not written", () => {
     expect(
       missingRequiredResultPaths(
-        ["/challenge/output/app/result.json"],
         ["/challenge/result.json"],
+        ["/challenge/output/app/result.json", "/challenge/result.json"],
       ),
-    ).toEqual(["/challenge/result.json"]);
+    ).toEqual(["/challenge/output/app/result.json"]);
   });
 });

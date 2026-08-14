@@ -21,7 +21,8 @@
     "cost_total",
     "call_log",
     "pi_exit_code",
-    "telemetry_source"
+    "telemetry_source",
+    "port_reclamation"
   ],
   "properties": {
     "status": { "enum": ["success", "partial", "failed"] },
@@ -98,6 +99,29 @@
       }
     },
     "pi_exit_code": { "type": "integer", "minimum": 0 },
-    "telemetry_source": { "const": "pi-json-event-stream" }
+    "telemetry_source": { "const": "pi-json-event-stream" },
+    "port_reclamation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preexisting_listener",
+        "listener_after_pi",
+        "attempted",
+        "reclaimed",
+        "process_ids",
+        "diagnostic"
+      ],
+      "properties": {
+        "preexisting_listener": { "type": "boolean" },
+        "listener_after_pi": { "type": "boolean" },
+        "attempted": { "type": "boolean" },
+        "reclaimed": { "type": "boolean" },
+        "process_ids": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "diagnostic": { "type": "string", "minLength": 1 }
+      }
+    }
   }
 }

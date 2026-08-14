@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareOutput } from "./prepare-output.js";
-import { reclaimAppOwnedPort } from "./port-owner.js";
+import { auditAppPortAfterPi } from "./port-owner.js";
 import { signalProcessTree, terminateProcessTree, usesDetachedProcessGroup } from "./process-tree.js";
 import { composeResult, missingRequiredResultPaths, readPartialResult, writeResult } from "./result.js";
 import { collectUsageFromJsonLines } from "./usage.js";
@@ -261,10 +261,10 @@ async function main(): Promise<void> {
     stderrFile,
     timeoutFromEnvironment(),
   );
-  if (!appPortHadListenerBeforePi && (await portHasListener(APP_PORT))) {
-    const reclamation = await reclaimAppOwnedPort(APP_PORT, outputDirectory);
-    const message = `${reclamation.diagnostic}; pids=${reclamation.processIds.join(",") || "none"}`;
-    if (reclamation.reclaimed) console.log(message);
+  const portReclamation = await auditAppPortAfterPi(APP_PORT, outputDirectory, appPortHadListenerBeforePi);
+  if (portReclamation.listener_after_pi) {
+    const message = `${portReclamation.diagnostic}; pids=${portReclamation.process_ids.join(",") || "none"}`;
+    if (portReclamation.reclaimed) console.log(message);
     else console.warn(message);
   }
 
@@ -274,8 +274,10 @@ async function main(): Promise<void> {
   let verification = unavailableAppVerification(
     canVerifyApp ? "app verification had not completed" : "Pi did not complete with audited model usage",
   );
-  let result = composeResult(partial, usage, pi.exitCode, verification);
+  let result = composeResult(partial, usage, pi.exitCode, verification, portReclamation);
+  const appResultPath = path.join(outputDirectory, "result.json");
   const rootResultPath = path.join(REPOSITORY_ROOT, "result.json");
+  const requiredResultPaths = [appResultPath, rootResultPath];
   let resultPaths = await writeResult(
     outputDirectory,
     result,
@@ -283,10 +285,10 @@ async function main(): Promise<void> {
   );
   if (canVerifyApp) {
     verification = await verifyGeneratedApp(outputDirectory, artifactDirectory, { displayRoot: REPOSITORY_ROOT });
-    result = composeResult(partial, usage, pi.exitCode, verification);
+    result = composeResult(partial, usage, pi.exitCode, verification, portReclamation);
     resultPaths = await writeResult(outputDirectory, result, [rootResultPath]);
   }
-  const missingResultPaths = missingRequiredResultPaths(resultPaths, [rootResultPath]);
+  const missingResultPaths = missingRequiredResultPaths(resultPaths, requiredResultPaths);
   const validationErrors = await validateResultObject(result);
   if (validationErrors.length > 0) {
     for (const error of validationErrors) console.error(`- ${error}`);

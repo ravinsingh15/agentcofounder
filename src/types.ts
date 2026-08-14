@@ -59,8 +59,18 @@ export interface AppVerification {
   testsRun: TestRun[];
 }
 
+export interface PortReclamationAudit {
+  preexisting_listener: boolean;
+  listener_after_pi: boolean;
+  attempted: boolean;
+  reclaimed: boolean;
+  process_ids: number[];
+  diagnostic: string;
+}
+
 export interface RunResult extends PartialRunResult, UsageSummary {
   reported_tests: TestRun[];
   pi_exit_code: number;
   telemetry_source: "pi-json-event-stream";
+  port_reclamation: PortReclamationAudit;
 }

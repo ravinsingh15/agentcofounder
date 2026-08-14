@@ -1,6 +1,13 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AppVerification, PartialRunResult, RunResult, TestRun, UsageSummary } from "./types.js";
+import type {
+  AppVerification,
+  PartialRunResult,
+  PortReclamationAudit,
+  RunResult,
+  TestRun,
+  UsageSummary,
+} from "./types.js";
 
 const FALLBACK_PARTIAL: PartialRunResult = {
   status: "failed",
@@ -67,6 +74,14 @@ export function composeResult(
   usage: UsageSummary,
   piExitCode: number,
   verification: AppVerification,
+  portReclamation: PortReclamationAudit = {
+    preexisting_listener: false,
+    listener_after_pi: false,
+    attempted: false,
+    reclaimed: false,
+    process_ids: [],
+    diagnostic: "Port reclamation was not needed",
+  },
 ): RunResult {
   const runFailed = piExitCode !== 0 || usage.model_calls === 0 || partial.status === "failed";
   const status = runFailed ? "failed" : verification.passed ? partial.status : "partial";
@@ -80,6 +95,7 @@ export function composeResult(
     ...usage,
     pi_exit_code: piExitCode,
     telemetry_source: "pi-json-event-stream",
+    port_reclamation: portReclamation,
   };
 }
 

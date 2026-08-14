@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
 import { readdir, readFile, readlink, realpath } from "node:fs/promises";
 import path from "node:path";
+import { signalProcessTree, usesDetachedProcessGroup } from "./process-tree.js";
+import type { PortReclamationAudit } from "./types.js";
 import { portHasListener } from "./verify-app.js";
+
+const LSOF_TIMEOUT_MS = 2_000;
 
 interface ProcessDiscovery {
   processIds: number[];
@@ -13,6 +17,12 @@ export interface PortReclamation {
   reclaimed: boolean;
   processIds: number[];
   diagnostic: string;
+}
+
+export interface CapturedCommand {
+  exitCode: number;
+  stdout: string;
+  timedOut: boolean;
 }
 
 function isInsideOrEqual(parent: string, candidate: string): boolean {
@@ -100,26 +110,51 @@ async function processIdsFromProc(port: number, appDirectory: string): Promise<n
   return processIds;
 }
 
-async function captureCommand(command: string, args: string[]): Promise<{ exitCode: number; stdout: string }> {
+export async function captureCommand(
+  command: string,
+  args: string[],
+  timeoutMs = LSOF_TIMEOUT_MS,
+): Promise<CapturedCommand> {
   return await new Promise((resolve) => {
     let stdout = "";
-    const child = spawn(command, args, { shell: false, stdio: ["ignore", "pipe", "ignore"] });
+    let settled = false;
+    let timeout: NodeJS.Timeout | undefined;
+    const child = spawn(command, args, {
+      detached: usesDetachedProcessGroup(),
+      shell: false,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const finish = (exitCode: number, timedOut: boolean): void => {
+      if (settled) return;
+      settled = true;
+      if (timeout !== undefined) clearTimeout(timeout);
+      resolve({ exitCode, stdout, timedOut });
+    };
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
-    child.once("error", () => resolve({ exitCode: 127, stdout }));
-    child.once("close", (code) => resolve({ exitCode: code ?? 1, stdout }));
+    child.once("error", () => finish(127, false));
+    child.once("close", (code) => finish(code ?? 1, false));
+    timeout = setTimeout(() => {
+      try {
+        signalProcessTree(child, "SIGKILL");
+      } catch {
+        child.kill("SIGKILL");
+      }
+      finish(124, true);
+    }, timeoutMs);
   });
 }
 
 async function cwdFromLsof(processId: number): Promise<string | undefined> {
-  const result = await captureCommand("lsof", ["-a", "-p", String(processId), "-d", "cwd", "-Fn"]);
+  const result = await captureCommand("lsof", ["-b", "-a", "-p", String(processId), "-d", "cwd", "-Fn"]);
   if (result.exitCode !== 0) return undefined;
   return result.stdout.split(/\r?\n/u).find((line) => line.startsWith("n"))?.slice(1);
 }
 
 async function processIdsFromLsof(port: number, appDirectory: string): Promise<ProcessDiscovery> {
   const result = await captureCommand("lsof", [
+    "-b",
     "-nP",
     "-a",
     `-iTCP:${port}`,
@@ -128,6 +163,9 @@ async function processIdsFromLsof(port: number, appDirectory: string): Promise<P
   ]);
   if (result.exitCode === 127) {
     return { processIds: [], diagnostic: "lsof is unavailable for port-owner discovery" };
+  }
+  if (result.timedOut) {
+    return { processIds: [], diagnostic: `lsof exceeded its ${LSOF_TIMEOUT_MS}ms discovery timeout` };
   }
   if (result.exitCode !== 0) return { processIds: [] };
 
@@ -145,12 +183,14 @@ async function processIdsFromLsof(port: number, appDirectory: string): Promise<P
   }
 
   const appRoot = await realpath(appDirectory);
-  const processIds: number[] = [];
-  for (const [processId, uid] of candidates) {
-    if (processId === process.pid || (expectedUid !== undefined && uid !== expectedUid)) continue;
-    const cwd = await cwdFromLsof(processId);
-    if (cwd && isInsideOrEqual(appRoot, cwd)) processIds.push(processId);
-  }
+  const inspectedProcessIds = await Promise.all(
+    [...candidates].map(async ([processId, uid]) => {
+      if (processId === process.pid || (expectedUid !== undefined && uid !== expectedUid)) return undefined;
+      const cwd = await cwdFromLsof(processId);
+      return cwd && isInsideOrEqual(appRoot, cwd) ? processId : undefined;
+    }),
+  );
+  const processIds = inspectedProcessIds.filter((processId): processId is number => processId !== undefined);
   return { processIds };
 }
 
@@ -229,5 +269,43 @@ export async function reclaimAppOwnedPort(
     diagnostic: reclaimed
       ? `Reclaimed port ${port} after SIGKILL`
       : `App-owned listener still held port ${port} after cleanup`,
+  };
+}
+
+export async function auditAppPortAfterPi(
+  port: number,
+  appDirectory: string,
+  preexistingListener: boolean,
+): Promise<PortReclamationAudit> {
+  const listenerAfterPi = await portHasListener(port);
+  if (preexistingListener) {
+    return {
+      preexisting_listener: true,
+      listener_after_pi: listenerAfterPi,
+      attempted: false,
+      reclaimed: false,
+      process_ids: [],
+      diagnostic: `Port ${port} was occupied before Pi; reclamation was skipped`,
+    };
+  }
+  if (!listenerAfterPi) {
+    return {
+      preexisting_listener: false,
+      listener_after_pi: false,
+      attempted: false,
+      reclaimed: false,
+      process_ids: [],
+      diagnostic: `Port ${port} remained free after Pi`,
+    };
+  }
+
+  const reclamation = await reclaimAppOwnedPort(port, appDirectory);
+  return {
+    preexisting_listener: false,
+    listener_after_pi: true,
+    attempted: reclamation.attempted,
+    reclaimed: reclamation.reclaimed,
+    process_ids: reclamation.processIds,
+    diagnostic: reclamation.diagnostic,
   };
 }

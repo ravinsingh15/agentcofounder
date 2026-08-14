@@ -4,7 +4,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { reclaimAppOwnedPort } from "../src/port-owner.js";
+import { auditAppPortAfterPi, captureCommand, reclaimAppOwnedPort } from "../src/port-owner.js";
 import { signalProcessTree, terminateProcessTree, usesDetachedProcessGroup } from "../src/process-tree.js";
 import { portHasListener } from "../src/verify-app.js";
 
@@ -39,6 +39,21 @@ afterEach(async () => {
 
 describe("process-tree cleanup", () => {
   const processGroupTest = usesDetachedProcessGroup() ? it : it.skip;
+
+  it("bounds an unresponsive port-owner discovery command", async () => {
+    const startedAt = Date.now();
+    const result = await captureCommand(
+      process.execPath,
+      [
+        "-e",
+        'const { spawn } = require("node:child_process"); spawn(process.execPath, ["-e", "setTimeout(() => {}, 10_000)"], { stdio: "inherit" }); setTimeout(() => {}, 10_000);',
+      ],
+      100,
+    );
+
+    expect(result).toMatchObject({ exitCode: 124, timedOut: true });
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+  });
 
   processGroupTest("reclaims a listener orphaned through Pi's double-detach topology", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-process-tree-"));
@@ -83,9 +98,9 @@ describe("process-tree cleanup", () => {
       await terminateProcessTree(launcher, 100);
       expect(await portHasListener(port)).toBe(true);
 
-      const reclamation = await reclaimAppOwnedPort(port, directory, 200);
-      expect(reclamation).toMatchObject({ attempted: true, reclaimed: true });
-      expect(reclamation.processIds).not.toHaveLength(0);
+      const audit = await auditAppPortAfterPi(port, directory, false);
+      expect(audit).toMatchObject({ attempted: true, reclaimed: true });
+      expect(audit.process_ids).not.toHaveLength(0);
       expect(await waitForListener(port, false)).toBe(true);
     } finally {
       signalProcessTree(launcher, "SIGKILL");
@@ -114,6 +129,39 @@ describe("process-tree cleanup", () => {
       expect(await waitForListener(port, true)).toBe(true);
       const reclamation = await reclaimAppOwnedPort(port, appDirectory, 100);
       expect(reclamation).toMatchObject({ attempted: false, reclaimed: false, processIds: [] });
+      expect(await portHasListener(port)).toBe(true);
+    } finally {
+      if (listener.pid !== undefined) {
+        try {
+          process.kill(listener.pid, "SIGKILL");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+        }
+      }
+      await waitForListener(port, false);
+    }
+  });
+
+  processGroupTest("does not reclaim an app-owned listener that predates Pi", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-preexisting-listener-"));
+    temporaryDirectories.push(directory);
+    const port = await getFreePort();
+    const listener = spawn(
+      process.execPath,
+      ["-e", `require("node:net").createServer().listen(${port}, "127.0.0.1")`],
+      { cwd: directory, detached: true, stdio: "ignore" },
+    );
+
+    try {
+      expect(await waitForListener(port, true)).toBe(true);
+      const audit = await auditAppPortAfterPi(port, directory, true);
+      expect(audit).toMatchObject({
+        preexisting_listener: true,
+        listener_after_pi: true,
+        attempted: false,
+        reclaimed: false,
+        process_ids: [],
+      });
       expect(await portHasListener(port)).toBe(true);
     } finally {
       if (listener.pid !== undefined) {
