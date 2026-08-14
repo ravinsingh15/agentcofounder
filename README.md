@@ -8,7 +8,7 @@ This repository installs Pi as a local dependency at exactly `@earendil-works/pi
 
 - `solution/` is the main participant surface: change the prompt, extension, skill, or replace the runner strategy.
 - `app-template/` is the neutral application seed copied into a fresh generated workspace for every run.
-- `contract-public/` contains only public inputs and schemas.
+- `contract-public/` contains only domain-neutral journey guidance and the result schema.
 - `src/` is the baseline runner and auditable result assembly.
 - `output/app/` is disposable generated application code and is reset before every run.
 - `artifacts/runs/` contains Pi JSON events, session JSONL files, stderr, and the run input.
@@ -45,10 +45,12 @@ The strict Node engine is intentional. `npm ci` fails on Node 23+ (including Nod
 
 The Docker build runs the full check suite, including short-lived Vite servers over the builder's loopback interface. The image declares port 3000 for organizer-controlled browser evaluation; publishing that port still requires an explicit container port mapping or shared container network.
 
-## Run the public challenge
+## Run a challenge idea
+
+No product idea is committed to this template. Keep unfinalized prompts in an organizer-controlled location and pass the finalized input explicitly:
 
 ```bash
-npm run challenge -- --idea-file contract-public/development-idea.txt
+npm run challenge -- --idea-file /path/to/finalized-idea.txt
 ```
 
 For a setup-only check that does not call a model:
@@ -97,7 +99,7 @@ The starter deliberately makes one autonomous Pi invocation. Possible participan
 - deliberate prompt caching;
 - a different Pi integration through its SDK or RPC mode.
 
-Do not add the development prompt's domain vocabulary or expected records to reusable code. The official idea will be different.
+Do not add a challenge idea's domain vocabulary or expected records to reusable code. The official judging idea will be different.
 
 ## Security
 

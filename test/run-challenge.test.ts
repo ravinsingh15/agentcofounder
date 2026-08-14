@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildPiArguments, runPi, runRequiresFailureExit } from "../src/run-challenge.js";
+import { buildPiArguments, parseArguments, runPi, runRequiresFailureExit } from "../src/run-challenge.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -11,6 +11,14 @@ afterEach(async () => {
 });
 
 describe("Pi launch", () => {
+  it("requires organizer-supplied idea input for every model run", () => {
+    expect(() => parseArguments([])).toThrow("--idea-file is required unless --prepare-only is used");
+    expect(parseArguments(["--prepare-only"]).ideaFile).toBeUndefined();
+    expect(parseArguments(["--idea-file", "organizer/idea.txt"]).ideaFile).toBe(
+      path.resolve("organizer/idea.txt"),
+    );
+  });
+
   it("fails an otherwise successful run when a required result destination is missing", () => {
     expect(runRequiresFailureExit(0, "success", ["/challenge/result.json"])).toBe(true);
     expect(runRequiresFailureExit(0, "success", [])).toBe(false);

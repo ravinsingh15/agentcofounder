@@ -13,7 +13,7 @@ import { validateResultObject } from "./validate-result.js";
 import { portHasListener, unavailableAppVerification, verifyGeneratedApp } from "./verify-app.js";
 
 interface Arguments {
-  ideaFile: string;
+  ideaFile?: string;
   outputDirectory: string;
   prepareOnly: boolean;
   skipAppInstall: boolean;
@@ -40,7 +40,7 @@ function printHelp(): void {
   console.log(`Usage: npm run challenge -- [options]
 
 Options:
-  --idea-file <path>      Idea prompt file (default: contract-public/development-idea.txt)
+  --idea-file <path>      Organizer-supplied idea prompt file (required unless --prepare-only)
   --output-dir <path>     Generated app directory below output/ (default: output/app)
   --prepare-only          Reset the app from the seed without invoking Pi
   --skip-app-install      Do not run npm ci in the generated app
@@ -54,9 +54,8 @@ Environment:
 `);
 }
 
-function parseArguments(argv: string[]): Arguments {
+export function parseArguments(argv: string[]): Arguments {
   const parsed: Arguments = {
-    ideaFile: path.join(REPOSITORY_ROOT, "contract-public", "development-idea.txt"),
     outputDirectory: path.join("output", "app"),
     prepareOnly: false,
     skipAppInstall: false,
@@ -85,6 +84,9 @@ function parseArguments(argv: string[]): Arguments {
       continue;
     }
     throw new Error(`Unknown argument: ${argument}`);
+  }
+  if (!parsed.prepareOnly && parsed.ideaFile === undefined) {
+    throw new Error("--idea-file is required unless --prepare-only is used");
   }
   return parsed;
 }
@@ -230,9 +232,7 @@ function timeoutFromEnvironment(): number {
 
 async function main(): Promise<void> {
   const args = parseArguments(process.argv.slice(2));
-  const idea = await readFile(args.ideaFile, "utf8");
-  const systemPrompt = await readFile(path.join(REPOSITORY_ROOT, "solution", "system-prompt.md"), "utf8");
-  const publicJourneys = await readFile(path.join(REPOSITORY_ROOT, "contract-public", "journeys.md"), "utf8");
+  const idea = args.ideaFile === undefined ? undefined : await readFile(args.ideaFile, "utf8");
   const outputDirectory = await prepareOutput(REPOSITORY_ROOT, args.outputDirectory);
   console.log(`Prepared clean application workspace: ${outputDirectory}`);
 
@@ -245,8 +245,13 @@ async function main(): Promise<void> {
     if (installCode !== 0) throw new Error(`App dependency installation failed with exit code ${installCode}`);
   }
   if (args.prepareOnly) return;
+  if (idea === undefined) throw new Error("Idea input was not loaded");
 
-  const appContext = await readFile(path.join(outputDirectory, "AGENTS.md"), "utf8");
+  const [systemPrompt, publicJourneys, appContext] = await Promise.all([
+    readFile(path.join(REPOSITORY_ROOT, "solution", "system-prompt.md"), "utf8"),
+    readFile(path.join(REPOSITORY_ROOT, "contract-public", "journeys.md"), "utf8"),
+    readFile(path.join(outputDirectory, "AGENTS.md"), "utf8"),
+  ]);
 
   const runId = new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
   const artifactDirectory = path.join(REPOSITORY_ROOT, "artifacts", "runs", runId);

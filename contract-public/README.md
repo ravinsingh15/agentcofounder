@@ -1,6 +1,6 @@
 # Public challenge contract
 
-The public development idea is intentionally the only product-specific fixture in this repository.
+No product-specific idea is committed to this repository. Organizers keep unfinalized prompts outside the participant template and supply a finalized input through `--idea-file`.
 
 The domain-neutral [public journey guidance](journeys.md) helps identify common behaviors without making them mandatory for every idea. The input idea remains authoritative: implement every journey it details or implies, and omit unrelated features. The runner appends that exact guidance to Pi's system prompt, keeping participant documentation and runtime guidance aligned.
 
