@@ -1,6 +1,6 @@
 # Public challenge contract
 
-No product-specific idea is committed to this repository. Organizers keep unfinalized prompts outside the participant template and supply a finalized input through `--idea-file`.
+`development-idea.txt` is the runner's default public input. The committed version is a development placeholder: organizers must replace it with the finalized public prompt before sharing the repository with participants. Hidden judging prompts must remain outside this repository and be supplied through `--idea-file`.
 
 The domain-neutral [public journey guidance](journeys.md) helps identify common behaviors without making them mandatory for every idea. The input idea remains authoritative: implement every journey it details or implies, and omit unrelated features. The runner appends that exact guidance to Pi's system prompt, keeping participant documentation and runtime guidance aligned.
 

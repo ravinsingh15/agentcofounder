@@ -8,12 +8,14 @@ This repository installs Pi as a local dependency at exactly `@earendil-works/pi
 
 - `solution/` is the main participant surface: change the prompt, extension, skill, or replace the runner strategy.
 - `app-template/` is the neutral application seed copied into a fresh generated workspace for every run.
-- `contract-public/` contains only domain-neutral journey guidance and the result schema.
+- `contract-public/` contains the replaceable public idea, domain-neutral journey guidance, and the result schema.
 - `src/` is the baseline runner and auditable result assembly.
 - `output/app/` is disposable generated application code and is reset before every run.
 - `artifacts/runs/` contains Pi JSON events, session JSONL files, stderr, and the run input.
 
 Official hidden prompts, hidden tests, model credentials, and final scoring code must remain outside participant repositories.
+
+> **Organizer release requirement:** `contract-public/development-idea.txt` is a development placeholder. Replace it with the finalized public prompt before sharing this repository with participants. Never place hidden judging material in this file.
 
 ## Prerequisites
 
@@ -45,13 +47,15 @@ The strict Node engine is intentional. `npm ci` fails on Node 23+ (including Nod
 
 The Docker build runs the full check suite, including short-lived Vite servers over the builder's loopback interface. The image declares port 3000 for organizer-controlled browser evaluation; publishing that port still requires an explicit container port mapping or shared container network.
 
-## Run a challenge idea
+## Run the public challenge
 
-No product idea is committed to this template. Keep unfinalized prompts in an organizer-controlled location and pass the finalized input explicitly:
+The runner uses `contract-public/development-idea.txt` by default. During template development it contains a placeholder; organizers must replace that file with the finalized public prompt before participant distribution.
 
 ```bash
-npm run challenge -- --idea-file /path/to/finalized-idea.txt
+npm run challenge
 ```
+
+Use `--idea-file /path/to/idea.txt` to override the default for organizer testing or hidden evaluation.
 
 For a setup-only check that does not call a model:
 

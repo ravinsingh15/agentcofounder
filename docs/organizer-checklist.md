@@ -4,7 +4,7 @@
 
 - Create a private project for each team from this template; avoid a public fork network.
 - Remove every hidden prompt, journey, selector, threshold, screenshot, and expected answer from participant-visible material.
-- Keep unfinalized product prompts outside this repository and provide the finalized public input through `--idea-file`.
+- Replace `contract-public/development-idea.txt` with the finalized public prompt; do not distribute the committed development placeholder to participants.
 - Publish the exact runtime image digest, Node version, Pi version, model identifier, thinking level, timeout, and network policy.
 - Decide and publish the cache-write token weight.
 - Decide whether ranking uses the custom weighted-token formula or Pi's provider cost. Do not describe both as authoritative.
@@ -17,7 +17,7 @@
 2. Build it in the organizer-controlled runtime using `npm ci --ignore-scripts`.
 3. Verify the installed Pi package reports `0.84.1`.
 4. Confirm the pinned organizer provider/model appears in Pi's offline model catalogue before the timed run.
-5. Run one credentialed submission against the finalized public prompt, supplied from an organizer-controlled path, through the complete success path.
+5. Run one credentialed submission against the finalized public prompt committed at `contract-public/development-idea.txt` through the complete success path.
    - Confirm `pi_exit_code` is `0`, `status` is `success`, and `model_calls` is greater than zero.
    - Inspect `port_reclamation` and investigate any run where cleanup was attempted or a listener predated Pi.
    - Validate both `output/app/result.json` and the repository-root `result.json`, and confirm their contents match.

@@ -11,9 +11,8 @@ afterEach(async () => {
 });
 
 describe("Pi launch", () => {
-  it("requires organizer-supplied idea input for every model run", () => {
-    expect(() => parseArguments([])).toThrow("--idea-file is required unless --prepare-only is used");
-    expect(parseArguments(["--prepare-only"]).ideaFile).toBeUndefined();
+  it("uses the replaceable public prompt by default and permits organizer overrides", () => {
+    expect(parseArguments([]).ideaFile).toBe(path.resolve("contract-public", "development-idea.txt"));
     expect(parseArguments(["--idea-file", "organizer/idea.txt"]).ideaFile).toBe(
       path.resolve("organizer/idea.txt"),
     );
