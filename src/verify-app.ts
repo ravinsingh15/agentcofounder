@@ -248,7 +248,7 @@ async function verifyDevelopmentServer(
   let served = false;
   try {
     const startup = await Promise.race([
-      waitForHttp(`http://127.0.0.1:${port}`, timeoutMs, childIsRunning).then((ready) => ({
+      waitForHttp(`http://localhost:${port}`, timeoutMs, childIsRunning).then((ready) => ({
         kind: "probe" as const,
         ready,
       })),

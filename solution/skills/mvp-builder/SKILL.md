@@ -10,9 +10,10 @@ description: Turn a non-technical product idea into a small, tested browser appl
 3. Prefer browser-local persistence unless the idea genuinely requires a backend. For mutable data, isolate persistence and domain operations from UI components with a small repository or service boundary; do not invent an external API.
 4. Implement accessible controls, validation, empty states, errors, and responsive layout. Handle duplicate or repeated actions, boundary values, malformed stored data, and recoverable storage or runtime failures where relevant.
 5. Keep components focused, separate concerns, and avoid duplication so another developer or agent can extend the app without a rewrite.
-6. Test every applicable observable user behavior with the included Vitest, jsdom, and Testing Library setup. Startup and assumptions reporting are runner obligations, not UI test journeys. Every committed test must run and pass; do not leave skipped or todo tests.
-7. Run the tests and production build before reporting success.
-8. Write `report.partial.json` with this exact shape:
+6. Use only the dependencies already installed from the committed lockfile. Do not add packages or run dependency-install commands.
+7. Test every applicable observable user behavior with the included Vitest, jsdom, and Testing Library setup. Startup and assumptions reporting are runner obligations, not UI test journeys. Every committed test must run and pass; do not leave skipped or todo tests.
+8. Run the tests and production build before reporting success.
+9. Write `report.partial.json` with this exact shape:
 
 ```json
 {
@@ -32,5 +33,5 @@ description: Turn a non-technical product idea into a small, tested browser appl
 }
 ```
 
-Use `partial` when useful functionality remains incomplete and `failed` when the app cannot run. Never invent a passing test.
+Use `success` only when `tests_run` contains at least one user journey and every entry passed. Use `partial` when useful functionality remains incomplete or any journey failed or was not run, and `failed` when the app cannot run. Never invent a passing test.
 Use only `passed` or `failed` for each test result. Record an unrun check as `failed` and explain why in its journey.

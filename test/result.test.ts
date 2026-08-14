@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -28,7 +29,7 @@ const partial: PartialRunResult = {
   tests_run: [{ command: "npm test", journey: "Create a record", result: "passed" }],
 };
 
-const ROOT_START_COMMAND = 'npm --prefix "output/app" run dev';
+const ROOT_START_COMMAND = "npm --prefix 'output/app' run dev";
 
 const usage: UsageSummary = {
   model_calls: 1,
@@ -114,6 +115,38 @@ describe("result contract", () => {
         ROOT_START_COMMAND,
       ).status,
     ).toBe("partial");
+  });
+
+  it("degrades success when no product journey was reported", async () => {
+    const result = composeResult(
+      { ...partial, tests_run: [] },
+      usage,
+      0,
+      verification,
+      portReclamation,
+      ROOT_START_COMMAND,
+    );
+
+    expect(result.status).toBe("partial");
+    expect(await validateResultObject({ ...result, status: "success" })).toContain(
+      "/tests_run must NOT have fewer than 1 items",
+    );
+  });
+
+  it("degrades success when a product journey failed", async () => {
+    const result = composeResult(
+      { ...partial, tests_run: [{ command: "npm test", journey: "Create a record", result: "failed" }] },
+      usage,
+      0,
+      verification,
+      portReclamation,
+      ROOT_START_COMMAND,
+    );
+
+    expect(result.status).toBe("partial");
+    expect(await validateResultObject({ ...result, status: "success" })).toContain(
+      "/tests_run/0/result must be equal to constant",
+    );
   });
 
   it("uses a root-runnable launch command and preserves product journeys in tests_run", () => {
@@ -239,6 +272,30 @@ describe("result contract", () => {
       expect(appResult.start_command).toBe("npm run dev");
       expect(rootResult.start_command).toBe(ROOT_START_COMMAND);
       expect({ ...appResult, start_command: ROOT_START_COMMAND }).toEqual(rootResult);
+    } finally {
+      await rm(repositoryRoot, { recursive: true });
+    }
+  });
+
+  it("shell-quotes special characters in a custom output directory", async () => {
+    const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-start-command-"));
+    const appDirectory = path.join(repositoryRoot, "output", "my$app");
+    await mkdir(appDirectory, { recursive: true });
+    await writeFile(
+      path.join(appDirectory, "package.json"),
+      JSON.stringify({ private: true, scripts: { dev: 'node -e "process.stdout.write(process.cwd())"' } }),
+      "utf8",
+    );
+    try {
+      const command = rootStartCommand(repositoryRoot, appDirectory);
+      const execution = spawnSync("sh", ["-c", command], {
+        cwd: repositoryRoot,
+        encoding: "utf8",
+      });
+
+      expect(command).toBe("npm --prefix 'output/my$app' run dev");
+      expect(execution.status, execution.stderr).toBe(0);
+      expect(execution.stdout).toContain(appDirectory);
     } finally {
       await rm(repositoryRoot, { recursive: true });
     }

@@ -21,9 +21,13 @@ const FALLBACK_PARTIAL: PartialRunResult = {
 
 const APP_DIRECTORY_START_COMMAND = "npm run dev";
 
+function quotePosixShellArgument(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 export function rootStartCommand(repositoryRoot: string, appDirectory: string): string {
   const relativeAppDirectory = path.relative(repositoryRoot, appDirectory).split(path.sep).join("/");
-  return `npm --prefix ${JSON.stringify(relativeAppDirectory)} run dev`;
+  return `npm --prefix ${quotePosixShellArgument(relativeAppDirectory)} run dev`;
 }
 
 function filteredStrings(value: unknown): string[] {
@@ -85,7 +89,9 @@ export function composeResult(
   startCommand: string,
 ): RunResult {
   const runFailed = piExitCode !== 0 || usage.model_calls === 0 || partial.status === "failed";
-  const status = runFailed ? "failed" : verification.passed ? partial.status : "partial";
+  const productJourneysPassed =
+    partial.tests_run.length > 0 && partial.tests_run.every((test) => test.result === "passed");
+  const status = runFailed ? "failed" : verification.passed && productJourneysPassed ? partial.status : "partial";
   return {
     ...partial,
     status,

@@ -25,6 +25,26 @@
     "telemetry_source",
     "port_reclamation"
   ],
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "success" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "tests_run": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": { "result": { "const": "passed" } }
+            }
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "status": { "enum": ["success", "partial", "failed"] },
     "app_url": { "const": "http://localhost:3000" },

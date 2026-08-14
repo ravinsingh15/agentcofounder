@@ -39,8 +39,11 @@ describe("Pi launch", () => {
       expect(args).not.toContain("--print");
       expect(args).not.toContain("--approve");
       expect(args[args.indexOf("--thinking") + 1]).toBe("off");
-      expect(args[args.indexOf("--system-prompt") + 1]).toContain("Stable app contract");
-      expect(args[args.indexOf("--system-prompt") + 1]).toContain("Create, edit, delete, narrow, derive, and persist");
+      expect(args).not.toContain("--system-prompt");
+      expect(args[args.indexOf("--append-system-prompt") + 1]).toContain("Stable app contract");
+      expect(args[args.indexOf("--append-system-prompt") + 1]).toContain(
+        "Create, edit, delete, narrow, derive, and persist",
+      );
       expect(args.at(-1)).toContain("Build a tool");
     } finally {
       if (previousThinking === undefined) delete process.env.CHALLENGE_THINKING;
@@ -48,14 +51,14 @@ describe("Pi launch", () => {
     }
   });
 
-  it("injects structurally consistent public journey guidance into Pi's system prompt", async () => {
+  it("appends structurally consistent public journey guidance to Pi's built-in system prompt", async () => {
     const [systemPrompt, publicJourneys, appContext] = await Promise.all([
       readFile(path.resolve("solution/system-prompt.md"), "utf8"),
       readFile(path.resolve("contract-public/journeys.md"), "utf8"),
       readFile(path.resolve("app-template/AGENTS.md"), "utf8"),
     ]);
     const args = buildPiArguments("Build a tool", systemPrompt, publicJourneys, appContext, "/tmp/run");
-    const suppliedSystemPrompt = args[args.indexOf("--system-prompt") + 1] ?? "";
+    const suppliedSystemPrompt = args[args.indexOf("--append-system-prompt") + 1] ?? "";
     const behaviorSection = /## Behaviors to implement and test when implied\s+([\s\S]*?)\n## /u.exec(
       publicJourneys,
     )?.[1];
