@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { portHasListener, verifyGeneratedApp } from "../src/verify-app.js";
 
 const temporaryDirectories: string[] = [];
+const defaultPortTest = (await portHasListener(3000)) ? it.skip : it;
 
 async function getFreePort(): Promise<number> {
   const server = net.createServer();
@@ -154,6 +155,7 @@ describe("app verification", () => {
 
     const result = await verifyGeneratedApp(appDirectory, artifactDirectory, {
       commandTimeoutMs: 30_000,
+      displayRoot: path.dirname(appDirectory),
       serverTimeoutMs: 10_000,
       port,
     });
@@ -162,8 +164,18 @@ describe("app verification", () => {
     expect(result.testsRun.map((entry) => entry.result)).toEqual(["passed", "passed", "passed"]);
     expect(result.testsRun[0]?.command).toContain("--outputFile=");
     const displayedReportPath = result.testsRun[0]?.command.split("--outputFile=")[1]?.split(" ")[0];
-    expect(displayedReportPath).toBeDefined();
-    expect(path.isAbsolute(displayedReportPath!)).toBe(false);
+    expect(displayedReportPath).toBe(path.join("artifacts", "app-test-results.json"));
+  }, 45_000);
+
+  defaultPortTest("exercises the bare production dev command on port 3000", async () => {
+    const { appDirectory, artifactDirectory } = await createPassingApp();
+    const result = await verifyGeneratedApp(appDirectory, artifactDirectory, {
+      commandTimeoutMs: 30_000,
+      serverTimeoutMs: 10_000,
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.testsRun[2]).toMatchObject({ command: "npm run dev", result: "passed" });
   }, 45_000);
 
   it("keeps verification verdicts independent from audit-log writes", async () => {
@@ -183,6 +195,7 @@ describe("app verification", () => {
 
       expect(result.passed).toBe(true);
       expect(result.testsRun.map((entry) => entry.result)).toEqual(["passed", "passed", "passed"]);
+      expect(result.testsRun[0]?.command).toContain("--outputFile=app-test-results.json");
       expect(warning).toHaveBeenCalledTimes(3);
     } finally {
       warning.mockRestore();

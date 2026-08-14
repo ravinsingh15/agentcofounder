@@ -14,6 +14,7 @@ RUN npm run check \
     && mkdir -p output artifacts \
     && chown -R node:node /challenge
 
+EXPOSE 3000
 USER node
 
 ENTRYPOINT ["npm", "run", "challenge", "--"]

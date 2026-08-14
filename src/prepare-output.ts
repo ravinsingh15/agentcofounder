@@ -25,13 +25,7 @@ export async function prepareOutput(
     try {
       await unlink(staleResult);
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") continue;
-      if (["EACCES", "EPERM", "EROFS"].includes(String(code))) {
-        console.warn(`Unable to remove stale result destination ${staleResult}: ${String(error)}`);
-        continue;
-      }
-      throw error;
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
   }
 

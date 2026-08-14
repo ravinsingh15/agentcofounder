@@ -43,6 +43,8 @@ The default thinking level is `off` to avoid multiplying output-token cost in th
 
 The strict Node engine is intentional. `npm ci` fails on Node 23+ (including Node 26); use `.nvmrc` or the provided container rather than regenerating the lockfile with a newer runtime.
 
+The Docker build runs the full check suite, including short-lived Vite servers over the builder's loopback interface. The image declares port 3000 for organizer-controlled browser evaluation; publishing that port still requires an explicit container port mapping or shared container network.
+
 ## Run the public challenge
 
 ```bash

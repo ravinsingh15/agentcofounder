@@ -20,6 +20,7 @@ interface VitestReport {
 
 export interface VerificationOptions {
   commandTimeoutMs?: number;
+  displayRoot?: string;
   serverTimeoutMs?: number;
   npmCommand?: string;
   vitestCommand?: string;
@@ -275,9 +276,18 @@ function testRun(command: string, journey: string, result: TestRun["result"]): T
   return { command, journey, result };
 }
 
+function boundedDisplayPath(displayRoot: string, target: string): string {
+  const relative = path.relative(displayRoot, target);
+  if (relative === "" || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return path.basename(target);
+  }
+  return relative;
+}
+
 function verificationCommands(
   appDirectory: string,
   artifactDirectory: string,
+  displayRoot: string,
   npmCommand: string,
   vitestCommand: string,
   port: number,
@@ -289,7 +299,7 @@ function verificationCommands(
     `--outputFile=${reportPath}`,
     "--passWithNoTests=false",
   ];
-  const displayedReportPath = path.relative(appDirectory, reportPath) || path.basename(reportPath);
+  const displayedReportPath = boundedDisplayPath(displayRoot, reportPath);
   const displayedArgs = [
     "run",
     "--reporter=json",
@@ -337,13 +347,14 @@ export async function verifyGeneratedApp(
   options: VerificationOptions = {},
 ): Promise<AppVerification> {
   const commandTimeoutMs = options.commandTimeoutMs ?? 120_000;
+  const displayRoot = options.displayRoot ?? process.cwd();
   const serverTimeoutMs = options.serverTimeoutMs ?? 20_000;
   const npmCommand = options.npmCommand ?? commandName("npm");
   const port = options.port ?? 3000;
   const vitestCommand =
     options.vitestCommand ??
     path.join(appDirectory, "node_modules", ".bin", process.platform === "win32" ? "vitest.cmd" : "vitest");
-  const commands = verificationCommands(appDirectory, artifactDirectory, npmCommand, vitestCommand, port);
+  const commands = verificationCommands(appDirectory, artifactDirectory, displayRoot, npmCommand, vitestCommand, port);
   const testReportPath = path.join(artifactDirectory, "app-test-results.json");
 
   try {

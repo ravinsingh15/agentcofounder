@@ -32,3 +32,4 @@ description: Turn a non-technical product idea into a small, tested browser appl
 ```
 
 Use `partial` when useful functionality remains incomplete and `failed` when the app cannot run. Never invent a passing test.
+Use only `passed` or `failed` for each test result. Record an unrun check as `failed` and explain why in its journey.

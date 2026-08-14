@@ -31,6 +31,7 @@
 - Enforce wall-clock and process-tree termination outside the participant process.
 - Mount the harness, public contract, validator, and result schema read-only. Give the process write access only to the generated app, artifact directory, and an optional dedicated repository-root `result.json` target.
 - Run hidden browser tests from a separate process or container.
+- When the browser judge is outside the app container, publish port 3000 (for example, `-p 3000:3000`) or attach both processes to the same isolated container network.
 - Recompute telemetry from the captured Pi session and gateway records.
 - Treat disagreement between participant telemetry, Pi session telemetry, and gateway telemetry as a failed audit.
 - Preserve stdout, stderr, sessions, result, app source, test results, runtime image digest, and commit SHA.

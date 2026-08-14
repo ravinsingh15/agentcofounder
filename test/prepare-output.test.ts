@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -19,6 +19,8 @@ afterEach(async () => {
 });
 
 describe("prepareOutput", () => {
+  const permissionTest = process.platform === "win32" || process.getuid?.() === 0 ? it.skip : it;
+
   it("creates and safely resets a managed output", async () => {
     const root = await fixture();
     const output = await prepareOutput(root, "output/app");
@@ -44,5 +46,16 @@ describe("prepareOutput", () => {
   it("refuses an output outside the managed root", async () => {
     const root = await fixture();
     await expect(prepareOutput(root, "../elsewhere")).rejects.toThrow("must be a child");
+  });
+
+  permissionTest("fails rather than leaving an authoritative stale root result", async () => {
+    const root = await fixture();
+    await writeFile(path.join(root, "result.json"), "stale\n", "utf8");
+    await chmod(root, 0o555);
+    try {
+      await expect(prepareOutput(root, "output/app")).rejects.toMatchObject({ code: "EACCES" });
+    } finally {
+      await chmod(root, 0o755);
+    }
   });
 });
