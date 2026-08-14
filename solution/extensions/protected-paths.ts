@@ -1,13 +1,14 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import path from "node:path";
 
-const PI_DOCUMENTATION_HEADING = "\n\nPi documentation (read only when ";
+export const PI_DOCUMENTATION_HEADING = "Pi documentation (read only when ";
+const PI_DOCUMENTATION_BLOCK_START = `\n\n${PI_DOCUMENTATION_HEADING}`;
 
 export function stripPiDocumentationBlock(systemPrompt: string): string {
-  const blockStart = systemPrompt.indexOf(PI_DOCUMENTATION_HEADING);
+  const blockStart = systemPrompt.indexOf(PI_DOCUMENTATION_BLOCK_START);
   if (blockStart < 0) return systemPrompt;
 
-  const headingEnd = systemPrompt.indexOf("\n", blockStart + PI_DOCUMENTATION_HEADING.length);
+  const headingEnd = systemPrompt.indexOf("\n", blockStart + PI_DOCUMENTATION_BLOCK_START.length);
   if (headingEnd < 0) return systemPrompt;
 
   let lineStart = headingEnd + 1;

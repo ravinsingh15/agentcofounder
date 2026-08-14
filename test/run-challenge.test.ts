@@ -1,8 +1,12 @@
 import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { stripPiDocumentationBlock } from "../solution/extensions/protected-paths.js";
+import {
+  PI_DOCUMENTATION_HEADING,
+  stripPiDocumentationBlock,
+} from "../solution/extensions/protected-paths.js";
 import { buildPiArguments, parseArguments, runPi, runRequiresFailureExit } from "../src/run-challenge.js";
 
 const temporaryDirectories: string[] = [];
@@ -89,7 +93,7 @@ describe("Pi launch", () => {
       "Guidelines:",
       "- Use bash for file operations",
       "",
-      "Pi documentation (read only when the user asks about pi itself):",
+      `${PI_DOCUMENTATION_HEADING}the user asks about pi itself):`,
       "- Main documentation: /challenge/node_modules/pi/README.md",
       "- Additional docs: /challenge/node_modules/pi/docs",
       "- Always read pi .md files completely",
@@ -109,6 +113,18 @@ describe("Pi launch", () => {
     expect(stripped).not.toContain("Pi documentation");
     expect(stripped).not.toContain("node_modules/pi/docs");
     expect(stripPiDocumentationBlock("No Pi documentation block")).toBe("No Pi documentation block");
+  });
+
+  it("pins the Pi documentation heading used by the prompt filter", async () => {
+    const piEntry = fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"));
+    const piSystemPromptPath = path.join(
+      path.dirname(piEntry),
+      "core",
+      "system-prompt.js",
+    );
+    const piSystemPromptSource = await readFile(piSystemPromptPath, "utf8");
+
+    expect(piSystemPromptSource.split(PI_DOCUMENTATION_HEADING)).toHaveLength(2);
   });
 
   it("reaches Pi provider validation without waiting for stdin EOF", async () => {
