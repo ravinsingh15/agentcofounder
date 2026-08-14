@@ -12,47 +12,43 @@ const FALLBACK_PARTIAL: PartialRunResult = {
   tests_run: [],
 };
 
-function strings(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
+function filteredStrings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function normalizeTestRun(value: unknown): TestRun | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.command !== "string" ||
+    typeof candidate.journey !== "string" ||
+    !["passed", "failed"].includes(String(candidate.result))
+  ) return undefined;
+  return {
+    command: candidate.command,
+    journey: candidate.journey,
+    result: candidate.result as TestRun["result"],
+  };
 }
 
 export function normalizePartialResult(value: unknown): PartialRunResult | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const result = value as Record<string, unknown>;
-  const validTests =
-    Array.isArray(result.tests_run) &&
-    result.tests_run.every((test) => {
-      if (typeof test !== "object" || test === null) return false;
-      const candidate = test as Record<string, unknown>;
-      return (
-        typeof candidate.command === "string" &&
-        typeof candidate.journey === "string" &&
-        ["passed", "failed", "skipped"].includes(String(candidate.result))
-      );
-    });
-
-  if (!(
-    ["success", "partial", "failed"].includes(String(result.status)) &&
-    typeof result.app_url === "string" &&
-    typeof result.start_command === "string" &&
-    typeof result.summary === "string" &&
-    strings(result.implemented_features) &&
-    strings(result.assumptions) &&
-    validTests
-  )) return undefined;
+  const status = ["success", "partial", "failed"].includes(String(result.status))
+    ? result.status as PartialRunResult["status"]
+    : "partial";
+  const testsRun = Array.isArray(result.tests_run)
+    ? result.tests_run.map(normalizeTestRun).filter((test): test is TestRun => test !== undefined)
+    : [];
 
   return {
-    status: result.status as PartialRunResult["status"],
-    app_url: result.app_url as string,
-    start_command: result.start_command as string,
-    summary: result.summary as string,
-    implemented_features: [...(result.implemented_features as string[])],
-    assumptions: [...(result.assumptions as string[])],
-    tests_run: (result.tests_run as Array<Record<string, unknown>>).map<TestRun>((test) => ({
-      command: test.command as string,
-      journey: test.journey as string,
-      result: test.result as TestRun["result"],
-    })),
+    status,
+    app_url: "http://localhost:3000",
+    start_command: "npm run dev",
+    summary: typeof result.summary === "string" ? result.summary : "Pi completed without a valid summary.",
+    implemented_features: filteredStrings(result.implemented_features),
+    assumptions: filteredStrings(result.assumptions),
+    tests_run: testsRun,
   };
 }
 
@@ -99,8 +95,8 @@ export async function writeResult(
     try {
       await writeFile(destination, content, "utf8");
       writtenPaths.push(destination);
-    } catch {
-      // Preserve every result destination that remains writable.
+    } catch (error) {
+      console.warn(`Unable to write result destination ${destination}: ${String(error)}`);
     }
   }
   if (writtenPaths.length === 0) throw new Error("Unable to write result.json to any configured destination");

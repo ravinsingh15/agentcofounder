@@ -41,7 +41,7 @@ export interface UsageSummary {
 export interface TestRun {
   command: string;
   journey: string;
-  result: "passed" | "failed" | "skipped";
+  result: "passed" | "failed";
 }
 
 export interface PartialRunResult {

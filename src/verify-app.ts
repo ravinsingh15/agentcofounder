@@ -10,7 +10,6 @@ const MAX_LOG_BYTES = 5 * 1024 * 1024;
 interface CommandOutcome {
   exitCode: number;
   timedOut: boolean;
-  logWritten: boolean;
 }
 
 interface VitestReport {
@@ -24,6 +23,7 @@ export interface VerificationOptions {
   serverTimeoutMs?: number;
   npmCommand?: string;
   vitestCommand?: string;
+  port?: number;
 }
 
 interface CapturedOutput {
@@ -62,7 +62,8 @@ async function safeWriteLog(logPath: string, content: string): Promise<boolean> 
   try {
     await writeFile(logPath, content, { encoding: "utf8", flag: "wx" });
     return true;
-  } catch {
+  } catch (error) {
+    console.warn(`Unable to write verification log ${logPath}: ${String(error)}`);
     return false;
   }
 }
@@ -84,7 +85,7 @@ async function runLoggedCommand(
 ): Promise<CommandOutcome> {
   const captured: CapturedOutput = { chunks: [], length: 0, truncated: false };
 
-  const outcome = await new Promise<Omit<CommandOutcome, "logWritten">>((resolve) => {
+  const outcome = await new Promise<CommandOutcome>((resolve) => {
     let child: ChildProcess;
     try {
       child = spawn(command, args, {
@@ -136,10 +137,8 @@ async function runLoggedCommand(
     child.once("close", (code) => finish(timedOut ? 124 : (code ?? 1)));
   });
 
-  return {
-    ...outcome,
-    logWritten: await safeWriteLog(logPath, renderOutput(captured)),
-  };
+  await safeWriteLog(logPath, renderOutput(captured));
+  return outcome;
 }
 
 export async function portHasListener(port: number, timeoutMs = 500): Promise<boolean> {
@@ -194,17 +193,19 @@ async function verifyDevelopmentServer(
   logPath: string,
   timeoutMs: number,
   npmCommand: string,
+  port: number,
 ): Promise<boolean> {
-  const port = 3000;
   if (await portHasListener(port)) {
-    await safeWriteLog(logPath, "Port 3000 already had a listener before app verification.\n");
+    await safeWriteLog(logPath, `Port ${port} already had a listener before app verification.\n`);
     return false;
   }
 
   const captured: CapturedOutput = { chunks: [], length: 0, truncated: false };
   let child: ChildProcess;
   try {
-    child = spawn(npmCommand, ["run", "dev"], {
+    const args = ["run", "dev"];
+    if (port !== 3000) args.push("--", "--port", String(port));
+    child = spawn(npmCommand, args, {
       cwd: appDirectory,
       detached: usesDetachedProcessGroup(),
       env: process.env,
@@ -243,7 +244,7 @@ async function verifyDevelopmentServer(
   let served = false;
   try {
     const startup = await Promise.race([
-      waitForHttp("http://127.0.0.1:3000", timeoutMs, childIsRunning).then((ready) => ({
+      waitForHttp(`http://127.0.0.1:${port}`, timeoutMs, childIsRunning).then((ready) => ({
         kind: "probe" as const,
         ready,
       })),
@@ -266,8 +267,8 @@ async function verifyDevelopmentServer(
   }
 
   const portClosed = await waitForPortToClose(port, 2_000);
-  const logWritten = await safeWriteLog(logPath, renderOutput(captured));
-  return served && childClosed && portClosed && logWritten;
+  await safeWriteLog(logPath, renderOutput(captured));
+  return served && childClosed && portClosed;
 }
 
 function testRun(command: string, journey: string, result: TestRun["result"]): TestRun {
@@ -279,6 +280,7 @@ function verificationCommands(
   artifactDirectory: string,
   npmCommand: string,
   vitestCommand: string,
+  port: number,
 ): { test: { args: string[]; display: string }; build: string; dev: string } {
   const reportPath = path.join(artifactDirectory, "app-test-results.json");
   const testArgs = [
@@ -287,11 +289,20 @@ function verificationCommands(
     `--outputFile=${reportPath}`,
     "--passWithNoTests=false",
   ];
-  const displayedVitest = path.relative(appDirectory, vitestCommand) || vitestCommand;
+  const displayedReportPath = path.relative(appDirectory, reportPath) || path.basename(reportPath);
+  const displayedArgs = [
+    "run",
+    "--reporter=json",
+    `--outputFile=${displayedReportPath}`,
+    "--passWithNoTests=false",
+  ];
+  const displayedVitest = path.isAbsolute(vitestCommand)
+    ? path.relative(appDirectory, vitestCommand) || path.basename(vitestCommand)
+    : vitestCommand;
   return {
-    test: { args: testArgs, display: [displayedVitest, ...testArgs].join(" ") },
+    test: { args: testArgs, display: [displayedVitest, ...displayedArgs].join(" ") },
     build: `${npmCommand} run build`,
-    dev: `${npmCommand} run dev`,
+    dev: port === 3000 ? `${npmCommand} run dev` : `${npmCommand} run dev -- --port ${port}`,
   };
 }
 
@@ -309,13 +320,13 @@ async function hasPassingVitestReport(reportPath: string): Promise<boolean> {
   }
 }
 
-export function skippedAppVerification(reason: string): AppVerification {
+export function unavailableAppVerification(reason: string): AppVerification {
   return {
     passed: false,
     testsRun: [
-      testRun("vitest run", `App tests were not run: ${reason}`, "skipped"),
-      testRun("npm run build", `Production build was not run: ${reason}`, "skipped"),
-      testRun("npm run dev", `HTTP startup probe was not run: ${reason}`, "skipped"),
+      testRun("vitest run", `App tests were not run: ${reason}`, "failed"),
+      testRun("npm run build", `Production build was not run: ${reason}`, "failed"),
+      testRun("npm run dev", `HTTP startup probe was not run: ${reason}`, "failed"),
     ],
   };
 }
@@ -328,10 +339,11 @@ export async function verifyGeneratedApp(
   const commandTimeoutMs = options.commandTimeoutMs ?? 120_000;
   const serverTimeoutMs = options.serverTimeoutMs ?? 20_000;
   const npmCommand = options.npmCommand ?? commandName("npm");
+  const port = options.port ?? 3000;
   const vitestCommand =
     options.vitestCommand ??
     path.join(appDirectory, "node_modules", ".bin", process.platform === "win32" ? "vitest.cmd" : "vitest");
-  const commands = verificationCommands(appDirectory, artifactDirectory, npmCommand, vitestCommand);
+  const commands = verificationCommands(appDirectory, artifactDirectory, npmCommand, vitestCommand, port);
   const testReportPath = path.join(artifactDirectory, "app-test-results.json");
 
   try {
@@ -342,8 +354,7 @@ export async function verifyGeneratedApp(
       path.join(artifactDirectory, "app-test.log"),
       commandTimeoutMs,
     );
-    const testsPassed =
-      test.exitCode === 0 && test.logWritten && (await hasPassingVitestReport(testReportPath));
+    const testsPassed = test.exitCode === 0 && (await hasPassingVitestReport(testReportPath));
     const build = await runLoggedCommand(
       npmCommand,
       ["run", "build"],
@@ -356,6 +367,7 @@ export async function verifyGeneratedApp(
       path.join(artifactDirectory, "app-dev.log"),
       serverTimeoutMs,
       npmCommand,
+      port,
     );
 
     const testsRun = [
@@ -367,11 +379,11 @@ export async function verifyGeneratedApp(
       testRun(
         commands.build,
         "The generated app completed a production build",
-        build.exitCode === 0 && build.logWritten ? "passed" : "failed",
+        build.exitCode === 0 ? "passed" : "failed",
       ),
       testRun(
         commands.dev,
-        "The generated app started its own HTTP server on port 3000 and shut down cleanly",
+        `The generated app started its own HTTP server on port ${port} and shut down cleanly`,
         serverPassed ? "passed" : "failed",
       ),
     ];
@@ -383,8 +395,8 @@ export async function verifyGeneratedApp(
       passed: false,
       testsRun: [
         testRun(commands.test.display, "App verification encountered an internal error", "failed"),
-        testRun(commands.build, "Production build could not be verified", "skipped"),
-        testRun(commands.dev, "HTTP startup could not be verified", "skipped"),
+        testRun(commands.build, "Production build could not be verified", "failed"),
+        testRun(commands.dev, "HTTP startup could not be verified", "failed"),
       ],
     };
   }

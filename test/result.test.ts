@@ -1,8 +1,8 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { composeResult, normalizePartialResult, writeResult } from "../src/result.js";
+import { describe, expect, it, vi } from "vitest";
+import { composeResult, normalizePartialResult, readPartialResult, writeResult } from "../src/result.js";
 import type { AppVerification, PartialRunResult, UsageSummary } from "../src/types.js";
 import { validateResultObject } from "../src/validate-result.js";
 
@@ -98,19 +98,62 @@ describe("result contract", () => {
     });
   });
 
+  it("salvages valid report fields instead of collapsing on one malformed field", () => {
+    const normalized = normalizePartialResult({
+      status: "pass",
+      app_url: ["ignored"],
+      start_command: ["ignored"],
+      summary: "Kept summary",
+      implemented_features: ["Feature one", 2, "Feature two"],
+      tests_run: [
+        { command: "npm test", journey: "Kept journey", result: "passed" },
+        { command: ["npm run build"], journey: "Dropped journey", result: "passed" },
+      ],
+    });
+
+    expect(normalized).toEqual({
+      status: "partial",
+      app_url: "http://localhost:3000",
+      start_command: "npm run dev",
+      summary: "Kept summary",
+      implemented_features: ["Feature one", "Feature two"],
+      assumptions: [],
+      tests_run: [{ command: "npm test", journey: "Kept journey", result: "passed" }],
+    });
+    expect(composeResult(normalized!, usage, 0, verification).status).toBe("partial");
+  });
+
+  it("reserves the failed fallback for a missing or unparseable report", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-partial-"));
+    try {
+      await writeFile(path.join(directory, "report.partial.json"), "not json", "utf8");
+      expect((await readPartialResult(directory)).status).toBe("failed");
+    } finally {
+      await rm(directory, { recursive: true });
+    }
+  });
+
   it("rejects telemetry totals that do not reconcile", async () => {
     const result = composeResult(partial, usage, 0, verification);
     result.input_tokens += 1;
     expect(await validateResultObject(result)).toContain("input_tokens does not reconcile with call_log");
   });
 
+  it("accepts a spec-shaped result without the harness-specific reported_tests field", async () => {
+    const { reported_tests: _reportedTests, ...specResult } = composeResult(partial, usage, 0, verification);
+    expect(await validateResultObject(specResult)).toEqual([]);
+  });
+
   it("keeps the app-root result when an optional mirror cannot be written", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-result-"));
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       const result = composeResult(partial, usage, 0, verification);
       const paths = await writeResult(directory, result, [path.join(directory, "missing", "result.json")]);
       expect(paths).toEqual([path.join(directory, "result.json")]);
+      expect(warning).toHaveBeenCalledWith(expect.stringContaining("Unable to write result destination"));
     } finally {
+      warning.mockRestore();
       await rm(directory, { recursive: true });
     }
   });
