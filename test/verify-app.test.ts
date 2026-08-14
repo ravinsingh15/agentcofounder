@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { portHasListener, verifyGeneratedApp } from "../src/verify-app.js";
 
 const temporaryDirectories: string[] = [];
-const defaultPortTest = (await portHasListener(3000)) ? it.skip : it;
+const defaultPortOccupied = await portHasListener(3000);
+if (defaultPortOccupied) {
+  console.warn("Skipping the bare production dev-command test because port 3000 already has a listener.");
+}
+const defaultPortTest = defaultPortOccupied ? it.skip : it;
 
 async function getFreePort(): Promise<number> {
   const server = net.createServer();
@@ -163,6 +167,7 @@ describe("app verification", () => {
     expect(result.passed).toBe(true);
     expect(result.testsRun.map((entry) => entry.result)).toEqual(["passed", "passed", "passed"]);
     expect(result.testsRun[0]?.command).toContain("--outputFile=");
+    expect(result.testsRun[0]?.command).toContain(path.join("app", "node_modules", ".bin", "vitest"));
     const displayedReportPath = result.testsRun[0]?.command.split("--outputFile=")[1]?.split(" ")[0];
     expect(displayedReportPath).toBe(path.join("artifacts", "app-test-results.json"));
   }, 45_000);

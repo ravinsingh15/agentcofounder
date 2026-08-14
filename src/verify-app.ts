@@ -307,7 +307,7 @@ function verificationCommands(
     "--passWithNoTests=false",
   ];
   const displayedVitest = path.isAbsolute(vitestCommand)
-    ? path.relative(appDirectory, vitestCommand) || path.basename(vitestCommand)
+    ? boundedDisplayPath(displayRoot, vitestCommand)
     : vitestCommand;
   return {
     test: { args: testArgs, display: [displayedVitest, ...displayedArgs].join(" ") },

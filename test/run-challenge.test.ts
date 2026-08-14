@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildPiArguments, runPi } from "../src/run-challenge.js";
+import { buildPiArguments, runPi, runRequiresFailureExit } from "../src/run-challenge.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -11,6 +11,11 @@ afterEach(async () => {
 });
 
 describe("Pi launch", () => {
+  it("fails an otherwise successful run when a required result destination is missing", () => {
+    expect(runRequiresFailureExit(0, "success", ["/challenge/result.json"])).toBe(true);
+    expect(runRequiresFailureExit(0, "success", [])).toBe(false);
+  });
+
   it("uses deterministic non-interactive flags and defaults thinking off", () => {
     const previousThinking = process.env.CHALLENGE_THINKING;
     delete process.env.CHALLENGE_THINKING;

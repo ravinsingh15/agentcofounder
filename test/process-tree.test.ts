@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { reclaimAppOwnedPort } from "../src/port-owner.js";
 import { signalProcessTree, terminateProcessTree, usesDetachedProcessGroup } from "../src/process-tree.js";
 import { portHasListener } from "../src/verify-app.js";
 
@@ -39,27 +40,39 @@ afterEach(async () => {
 describe("process-tree cleanup", () => {
   const processGroupTest = usesDetachedProcessGroup() ? it : it.skip;
 
-  processGroupTest("terminates a background listener after its parent exits normally", async () => {
+  processGroupTest("reclaims a listener orphaned through Pi's double-detach topology", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-process-tree-"));
     temporaryDirectories.push(directory);
     const listenerPath = path.join(directory, "listener.cjs");
-    const launcherPath = path.join(directory, "launcher.cjs");
+    const shellPath = path.join(directory, "shell.cjs");
+    const piPath = path.join(directory, "pi.cjs");
+    const listenerPidPath = path.join(directory, "listener.pid");
     const port = await getFreePort();
     await writeFile(
       listenerPath,
-      'require("node:net").createServer().listen(Number(process.argv[2]), "127.0.0.1");\n',
+      'require("node:fs").writeFileSync(process.argv[3], String(process.pid)); require("node:net").createServer().listen(Number(process.argv[2]), "127.0.0.1");\n',
       "utf8",
     );
     await writeFile(
-      launcherPath,
-      'const { spawn } = require("node:child_process"); const child = spawn(process.execPath, [process.argv[2], process.argv[3]], { stdio: "ignore" }); child.unref();\n',
+      shellPath,
+      'const { spawn } = require("node:child_process"); const child = spawn(process.execPath, [process.argv[2], process.argv[3], process.argv[4]], { stdio: "ignore" }); child.unref();\n',
+      "utf8",
+    );
+    await writeFile(
+      piPath,
+      'const { spawn } = require("node:child_process"); const child = spawn(process.execPath, [process.argv[2], process.argv[3], process.argv[4], process.argv[5]], { detached: true, stdio: "ignore" }); child.once("close", (code) => process.exit(code ?? 1));\n',
       "utf8",
     );
 
-    const launcher = spawn(process.execPath, [launcherPath, listenerPath, String(port)], {
-      detached: true,
-      stdio: "ignore",
-    });
+    const launcher = spawn(
+      process.execPath,
+      [piPath, shellPath, listenerPath, String(port), listenerPidPath],
+      {
+        cwd: directory,
+        detached: true,
+        stdio: "ignore",
+      },
+    );
     await new Promise<void>((resolve, reject) => {
       launcher.once("error", reject);
       launcher.once("close", (code) => (code === 0 ? resolve() : reject(new Error(`Launcher exited ${code}`))));
@@ -68,9 +81,49 @@ describe("process-tree cleanup", () => {
     try {
       expect(await waitForListener(port, true)).toBe(true);
       await terminateProcessTree(launcher, 100);
+      expect(await portHasListener(port)).toBe(true);
+
+      const reclamation = await reclaimAppOwnedPort(port, directory, 200);
+      expect(reclamation).toMatchObject({ attempted: true, reclaimed: true });
+      expect(reclamation.processIds).not.toHaveLength(0);
       expect(await waitForListener(port, false)).toBe(true);
     } finally {
       signalProcessTree(launcher, "SIGKILL");
+      try {
+        process.kill(Number(await readFile(listenerPidPath, "utf8")), "SIGKILL");
+      } catch (error) {
+        if (!["ENOENT", "ESRCH"].includes(String((error as NodeJS.ErrnoException).code))) throw error;
+      }
+    }
+  });
+
+  processGroupTest("does not reclaim a listener outside the generated app", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-port-owner-"));
+    temporaryDirectories.push(directory);
+    const appDirectory = path.join(directory, "app");
+    const otherDirectory = path.join(directory, "other");
+    await Promise.all([mkdir(appDirectory), mkdir(otherDirectory)]);
+    const port = await getFreePort();
+    const listener = spawn(
+      process.execPath,
+      ["-e", `require("node:net").createServer().listen(${port}, "127.0.0.1")`],
+      { cwd: otherDirectory, detached: true, stdio: "ignore" },
+    );
+
+    try {
+      expect(await waitForListener(port, true)).toBe(true);
+      const reclamation = await reclaimAppOwnedPort(port, appDirectory, 100);
+      expect(reclamation).toMatchObject({ attempted: false, reclaimed: false, processIds: [] });
+      expect(await portHasListener(port)).toBe(true);
+    } finally {
+      if (listener.pid !== undefined) {
+        try {
+          process.kill(listener.pid, "SIGKILL");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+        }
+      }
+      await waitForListener(port, false);
     }
   });
 });

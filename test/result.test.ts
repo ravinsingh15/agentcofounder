@@ -2,7 +2,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { composeResult, normalizePartialResult, readPartialResult, writeResult } from "../src/result.js";
+import {
+  composeResult,
+  missingRequiredResultPaths,
+  normalizePartialResult,
+  readPartialResult,
+  writeResult,
+} from "../src/result.js";
 import type { AppVerification, PartialRunResult, UsageSummary } from "../src/types.js";
 import { validateResultObject } from "../src/validate-result.js";
 
@@ -156,5 +162,14 @@ describe("result contract", () => {
       warning.mockRestore();
       await rm(directory, { recursive: true });
     }
+  });
+
+  it("identifies a requested result destination that was not written", () => {
+    expect(
+      missingRequiredResultPaths(
+        ["/challenge/output/app/result.json"],
+        ["/challenge/result.json"],
+      ),
+    ).toEqual(["/challenge/result.json"]);
   });
 });

@@ -4,11 +4,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareOutput } from "./prepare-output.js";
+import { reclaimAppOwnedPort } from "./port-owner.js";
 import { signalProcessTree, terminateProcessTree, usesDetachedProcessGroup } from "./process-tree.js";
-import { composeResult, readPartialResult, writeResult } from "./result.js";
+import { composeResult, missingRequiredResultPaths, readPartialResult, writeResult } from "./result.js";
 import { collectUsageFromJsonLines } from "./usage.js";
+import type { RunResult } from "./types.js";
 import { validateResultObject } from "./validate-result.js";
-import { unavailableAppVerification, verifyGeneratedApp } from "./verify-app.js";
+import { portHasListener, unavailableAppVerification, verifyGeneratedApp } from "./verify-app.js";
 
 interface Arguments {
   ideaFile: string;
@@ -24,6 +26,15 @@ export interface CommandResult {
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(SOURCE_DIRECTORY, "..");
+const APP_PORT = 3000;
+
+export function runRequiresFailureExit(
+  piExitCode: number,
+  resultStatus: RunResult["status"],
+  missingResultPaths: string[],
+): boolean {
+  return missingResultPaths.length > 0 || piExitCode !== 0 || resultStatus !== "success";
+}
 
 function printHelp(): void {
   console.log(`Usage: npm run challenge -- [options]
@@ -242,6 +253,7 @@ async function main(): Promise<void> {
 
   const eventFile = path.join(artifactDirectory, "events.jsonl");
   const stderrFile = path.join(artifactDirectory, "pi.stderr.log");
+  const appPortHadListenerBeforePi = await portHasListener(APP_PORT);
   const pi = await runPi(
     buildPiArguments(idea, systemPrompt, appContext, artifactDirectory),
     outputDirectory,
@@ -249,6 +261,12 @@ async function main(): Promise<void> {
     stderrFile,
     timeoutFromEnvironment(),
   );
+  if (!appPortHadListenerBeforePi && (await portHasListener(APP_PORT))) {
+    const reclamation = await reclaimAppOwnedPort(APP_PORT, outputDirectory);
+    const message = `${reclamation.diagnostic}; pids=${reclamation.processIds.join(",") || "none"}`;
+    if (reclamation.reclaimed) console.log(message);
+    else console.warn(message);
+  }
 
   const usage = collectUsageFromJsonLines(await readFile(eventFile, "utf8"));
   const partial = await readPartialResult(outputDirectory);
@@ -268,6 +286,7 @@ async function main(): Promise<void> {
     result = composeResult(partial, usage, pi.exitCode, verification);
     resultPaths = await writeResult(outputDirectory, result, [rootResultPath]);
   }
+  const missingResultPaths = missingRequiredResultPaths(resultPaths, [rootResultPath]);
   const validationErrors = await validateResultObject(result);
   if (validationErrors.length > 0) {
     for (const error of validationErrors) console.error(`- ${error}`);
@@ -277,8 +296,11 @@ async function main(): Promise<void> {
 
   console.log(`Result written to ${resultPaths.join(" and ")}`);
   console.log(`Audit artifacts written to ${artifactDirectory}`);
+  for (const missingResultPath of missingResultPaths) {
+    console.error(`Required result destination was not written: ${missingResultPath}`);
+  }
   if (pi.timedOut) console.error("Pi exceeded CHALLENGE_TIMEOUT_MS and was terminated.");
-  if (pi.exitCode !== 0 || result.status !== "success") process.exitCode = 1;
+  if (runRequiresFailureExit(pi.exitCode, result.status, missingResultPaths)) process.exitCode = 1;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

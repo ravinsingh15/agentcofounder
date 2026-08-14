@@ -102,3 +102,8 @@ export async function writeResult(
   if (writtenPaths.length === 0) throw new Error("Unable to write result.json to any configured destination");
   return writtenPaths;
 }
+
+export function missingRequiredResultPaths(writtenPaths: string[], requiredPaths: string[]): string[] {
+  const written = new Set(writtenPaths.map((destination) => path.resolve(destination)));
+  return requiredPaths.filter((destination) => !written.has(path.resolve(destination)));
+}

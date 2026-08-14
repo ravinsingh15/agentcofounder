@@ -19,7 +19,11 @@ afterEach(async () => {
 });
 
 describe("prepareOutput", () => {
-  const permissionTest = process.platform === "win32" || process.getuid?.() === 0 ? it.skip : it;
+  const permissionTestSkipped = process.platform === "win32" || process.getuid?.() === 0;
+  if (permissionTestSkipped) {
+    console.warn("Skipping the stale-result permission test because this process can bypass directory modes.");
+  }
+  const permissionTest = permissionTestSkipped ? it.skip : it;
 
   it("creates and safely resets a managed output", async () => {
     const root = await fixture();
