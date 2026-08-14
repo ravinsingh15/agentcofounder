@@ -9,7 +9,12 @@ import {
   readPartialResult,
   writeResult,
 } from "../src/result.js";
-import type { AppVerification, PartialRunResult, UsageSummary } from "../src/types.js";
+import type {
+  AppVerification,
+  PartialRunResult,
+  PortReclamationAudit,
+  UsageSummary,
+} from "../src/types.js";
 import { validateResultObject } from "../src/validate-result.js";
 
 const partial: PartialRunResult = {
@@ -54,15 +59,24 @@ const verification: AppVerification = {
   ],
 };
 
+const portReclamation: PortReclamationAudit = {
+  preexisting_listener: false,
+  listener_after_pi: false,
+  attempted: false,
+  reclaimed: false,
+  process_ids: [],
+  diagnostic: "Port 3000 remained free after Pi",
+};
+
 describe("result contract", () => {
   it("accepts a reconciled result", async () => {
-    const result = composeResult(partial, usage, 0, verification);
+    const result = composeResult(partial, usage, 0, verification, portReclamation);
     expect(await validateResultObject(result)).toEqual([]);
     expect(result.port_reclamation).toMatchObject({ attempted: false, process_ids: [] });
   });
 
   it("overrides success when Pi exits unsuccessfully", () => {
-    expect(composeResult(partial, usage, 124, verification).status).toBe("failed");
+    expect(composeResult(partial, usage, 124, verification, portReclamation).status).toBe("failed");
   });
 
   it("overrides success when telemetry contains no model calls", async () => {
@@ -77,7 +91,7 @@ describe("result contract", () => {
       cost_total: 0,
       call_log: [],
     };
-    const result = composeResult(partial, zeroUsage, 0, verification);
+    const result = composeResult(partial, zeroUsage, 0, verification, portReclamation);
     expect(result.status).toBe("failed");
     expect(await validateResultObject({ ...result, status: "success" })).toContain(
       "non-failed result must include at least one model call",
@@ -85,7 +99,9 @@ describe("result contract", () => {
   });
 
   it("degrades a completed run to partial when an independent app check fails", () => {
-    expect(composeResult(partial, usage, 0, { ...verification, passed: false }).status).toBe("partial");
+    expect(composeResult(partial, usage, 0, { ...verification, passed: false }, portReclamation).status).toBe(
+      "partial",
+    );
   });
 
   it("uses runner-owned launch fields and preserves normalized reported product journeys", () => {
@@ -97,7 +113,7 @@ describe("result contract", () => {
       tests_run: [{ ...partial.tests_run[0], notes: "chatty model output" }],
     });
     expect(normalized?.tests_run).toEqual(partial.tests_run);
-    const result = composeResult(normalized ?? partial, usage, 0, verification);
+    const result = composeResult(normalized ?? partial, usage, 0, verification, portReclamation);
     expect(result).toMatchObject({
       app_url: "http://localhost:3000",
       start_command: "npm run dev",
@@ -128,7 +144,7 @@ describe("result contract", () => {
       assumptions: [],
       tests_run: [{ command: "npm test", journey: "Kept journey", result: "passed" }],
     });
-    expect(composeResult(normalized!, usage, 0, verification).status).toBe("partial");
+    expect(composeResult(normalized!, usage, 0, verification, portReclamation).status).toBe("partial");
   });
 
   it("reserves the failed fallback for a missing or unparseable report", async () => {
@@ -142,21 +158,34 @@ describe("result contract", () => {
   });
 
   it("rejects telemetry totals that do not reconcile", async () => {
-    const result = composeResult(partial, usage, 0, verification);
+    const result = composeResult(partial, usage, 0, verification, portReclamation);
     result.input_tokens += 1;
     expect(await validateResultObject(result)).toContain("input_tokens does not reconcile with call_log");
   });
 
-  it("accepts a spec-shaped result without the harness-specific reported_tests field", async () => {
-    const { reported_tests: _reportedTests, ...specResult } = composeResult(partial, usage, 0, verification);
-    expect(await validateResultObject(specResult)).toEqual([]);
+  it("requires every documented harness audit field", async () => {
+    const result = composeResult(partial, usage, 0, verification, portReclamation);
+    const auditFields = [
+      "reported_tests",
+      "reasoning_tokens",
+      "cost_total",
+      "pi_exit_code",
+      "telemetry_source",
+      "port_reclamation",
+    ];
+
+    for (const field of auditFields) {
+      const incomplete = structuredClone(result) as unknown as Record<string, unknown>;
+      delete incomplete[field];
+      expect(await validateResultObject(incomplete)).toEqual([expect.stringContaining(`'${field}'`)]);
+    }
   });
 
   it("keeps the app-root result when an optional mirror cannot be written", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "agent-cofounder-result-"));
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
-      const result = composeResult(partial, usage, 0, verification);
+      const result = composeResult(partial, usage, 0, verification, portReclamation);
       const paths = await writeResult(directory, result, [path.join(directory, "missing", "result.json")]);
       expect(paths).toEqual([path.join(directory, "result.json")]);
       expect(warning).toHaveBeenCalledWith(expect.stringContaining("Unable to write result destination"));

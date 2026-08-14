@@ -11,6 +11,7 @@
     "implemented_features",
     "assumptions",
     "tests_run",
+    "reported_tests",
     "model_calls",
     "input_tokens",
     "output_tokens",

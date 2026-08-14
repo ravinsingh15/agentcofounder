@@ -190,6 +190,7 @@ export async function runPi(
 export function buildPiArguments(
   idea: string,
   systemPrompt: string,
+  publicJourneys: string,
   appContext: string,
   artifactDirectory: string,
 ): string[] {
@@ -203,7 +204,7 @@ export function buildPiArguments(
     "--no-themes",
     "--no-context-files",
     "--system-prompt",
-    `${systemPrompt.trim()}\n\n## Generated application contract\n\n${appContext.trim()}`,
+    `${systemPrompt.trim()}\n\n${publicJourneys.trim()}\n\n## Generated application contract\n\n${appContext.trim()}`,
     "--session-dir",
     path.join(artifactDirectory, "sessions"),
     "--extension",
@@ -231,6 +232,7 @@ async function main(): Promise<void> {
   const args = parseArguments(process.argv.slice(2));
   const idea = await readFile(args.ideaFile, "utf8");
   const systemPrompt = await readFile(path.join(REPOSITORY_ROOT, "solution", "system-prompt.md"), "utf8");
+  const publicJourneys = await readFile(path.join(REPOSITORY_ROOT, "contract-public", "journeys.md"), "utf8");
   const outputDirectory = await prepareOutput(REPOSITORY_ROOT, args.outputDirectory);
   console.log(`Prepared clean application workspace: ${outputDirectory}`);
 
@@ -255,7 +257,7 @@ async function main(): Promise<void> {
   const stderrFile = path.join(artifactDirectory, "pi.stderr.log");
   const appPortHadListenerBeforePi = await portHasListener(APP_PORT);
   const pi = await runPi(
-    buildPiArguments(idea, systemPrompt, appContext, artifactDirectory),
+    buildPiArguments(idea, systemPrompt, publicJourneys, appContext, artifactDirectory),
     outputDirectory,
     eventFile,
     stderrFile,

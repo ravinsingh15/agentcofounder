@@ -74,14 +74,7 @@ export function composeResult(
   usage: UsageSummary,
   piExitCode: number,
   verification: AppVerification,
-  portReclamation: PortReclamationAudit = {
-    preexisting_listener: false,
-    listener_after_pi: false,
-    attempted: false,
-    reclaimed: false,
-    process_ids: [],
-    diagnostic: "Port reclamation was not needed",
-  },
+  portReclamation: PortReclamationAudit,
 ): RunResult {
   const runFailed = piExitCode !== 0 || usage.model_calls === 0 || partial.status === "failed";
   const status = runFailed ? "failed" : verification.passed ? partial.status : "partial";
